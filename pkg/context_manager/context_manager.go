@@ -109,7 +109,11 @@ func AddContextAddFileToContextArchive(ctx context.Context, originalArchivePath 
 			}
 
 			for _, fileToCopy := range filesToCopy {
-				tarEntryName := filepath.ToSlash(fileToCopy)
+				tarEntryName, err := filepath.Rel(filepath.Join(projectDir, contextDir), fileToCopy)
+				if err != nil {
+					return fmt.Errorf("unable to get context relative path for %q: %s", fileToCopy, err)
+				}
+				tarEntryName = filepath.ToSlash(tarEntryName)
 				if err := util.CopyFileIntoTar(tw, tarEntryName, fileToCopy); err != nil {
 					return fmt.Errorf("unable to add contextAddFile %q to archive %q: %s", fileToCopy, destinationArchivePath, err)
 				}
