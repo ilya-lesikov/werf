@@ -37,6 +37,7 @@ require (
 	github.com/hailocab/go-hostpool v0.0.0-20160125115350-e80d13ce29ed // indirect
 	github.com/hashicorp/go-multierror v1.0.0
 	github.com/hashicorp/go-version v1.2.0
+	github.com/helm/helm-2to3 v0.8.1
 	github.com/huandu/xstrings v1.3.2 // indirect
 	github.com/jinzhu/gorm v1.9.12 // indirect
 	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0 // indirect
@@ -64,7 +65,7 @@ require (
 	github.com/tonistiigi/go-rosetta v0.0.0-20200727161949-f79598599c5d // indirect
 	github.com/werf/kubedog v0.4.1-0.20210204234118-a6e65f252855
 	github.com/werf/lockgate v0.0.0-20200729113342-ec2c142f71ea
-	github.com/werf/logboek v0.5.1
+	github.com/werf/logboek v0.5.2
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	golang.org/x/crypto v0.0.0-20201002170205-7f63de1d35b0
 	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b
@@ -74,14 +75,16 @@ require (
 	gopkg.in/ini.v1 v1.56.0
 	gopkg.in/oleiade/reflections.v1 v1.0.0
 	gopkg.in/yaml.v2 v2.3.0
-	helm.sh/helm/v3 v3.2.4
+	helm.sh/helm/v3 v3.5.1
 	k8s.io/api v0.20.1
-	k8s.io/apimachinery v0.20.1
+	k8s.io/apimachinery v0.20.2
 	k8s.io/cli-runtime v0.20.1
 	k8s.io/client-go v0.20.1
+	k8s.io/helm v2.17.0+incompatible
 	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.4.0
 	k8s.io/kubectl v0.20.1
+	k8s.io/kubernetes v1.13.0
 	mvdan.cc/xurls v1.1.0
 	rsc.io/letsencrypt v0.0.3 // indirect
 	sigs.k8s.io/yaml v1.2.0
@@ -113,5 +116,7 @@ replace github.com/jaguilar/vt100 => github.com/tonistiigi/vt100 v0.0.0-20190402
 replace github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.3.2+incompatible
 
 replace helm.sh/helm/v3 => github.com/werf/helm/v3 v3.0.0-20210204134058-cb1f9e60e8b3
+
+replace k8s.io/helm => github.com/werf/helm v0.0.0-20210202111118-81e74d46da0f
 
 replace github.com/deislabs/oras => github.com/werf/oras v0.8.2-0.20210128161614-26d583f169ea

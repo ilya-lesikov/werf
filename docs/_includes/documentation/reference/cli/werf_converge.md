@@ -67,7 +67,7 @@ werf converge --repo registry.mydomain.com/web --env production
       --dev=false
             Enable developer mode (default $WERF_DEV)
       --dir=''
-            Use specified project directory where project's werf.yaml and other configuration files 
+            Use specified project directory where project’s werf.yaml and other configuration files 
             should reside (default $WERF_DIR or current working directory)
       --docker-config=''
             Specify docker config directory path. Default $WERF_DOCKER_CONFIG or $DOCKER_CONFIG or  
@@ -259,6 +259,14 @@ werf converge --repo registry.mydomain.com/web --env production
             Resources tracking timeout in seconds
       --tmp-dir=''
             Use specified dir to store tmp files and dirs (default $WERF_TMP_DIR or system tmp dir)
+      --use-custom-tag=''
+            Use a tag alias in helm templates instead of an image content-based tag (NOT            
+            RECOMMENDED).
+            For cleaning all aliases and a related content-based tag are treated as one.
+            It is necessary to use the image name shortcut %image% or %image_slug% in the tag       
+            format if there is more than one image in the werf config. 
+            Also, can be defined with $WERF_USE_CUSTOM_TAG (e.g.                                    
+            $WERF_USE_CUSTOM_TAG="%image%-tag").
       --values=[]
             Specify helm values in a YAML file or a URL (can specify multiple).
             Also, can be defined with $WERF_VALUES_* (e.g. $WERF_VALUES_ENV=.helm/values_test.yaml, 

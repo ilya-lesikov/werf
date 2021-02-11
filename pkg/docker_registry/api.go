@@ -49,6 +49,22 @@ func (api *api) Tags(_ context.Context, reference string) ([]string, error) {
 	return tags, nil
 }
 
+func (api *api) tagImage(reference, tag string) error {
+	ref, err := name.ParseReference(reference, api.parseReferenceOptions()...)
+	if err != nil {
+		return fmt.Errorf("parsing reference %q: %v", reference, err)
+	}
+
+	desc, err := remote.Get(ref, api.defaultRemoteOptions()...)
+	if err != nil {
+		return fmt.Errorf("getting reference %q: %v", reference, err)
+	}
+
+	dst := ref.Context().Tag(tag)
+
+	return remote.Tag(dst, desc, api.defaultRemoteOptions()...)
+}
+
 func (api *api) IsRepoImageExists(ctx context.Context, reference string) (bool, error) {
 	if imgInfo, err := api.TryGetRepoImage(ctx, reference); err != nil {
 		return false, err
@@ -59,7 +75,13 @@ func (api *api) IsRepoImageExists(ctx context.Context, reference string) (bool, 
 
 func (api *api) TryGetRepoImage(ctx context.Context, reference string) (*image.Info, error) {
 	if imgInfo, err := api.GetRepoImage(ctx, reference); err != nil {
-		if IsManifestUnknownError(err) || IsNameUnknownError(err) {
+		if IsBlobUnknownError(err) || IsManifestUnknownError(err) {
+			// TODO: Delete such images in werf-cleanup then enable warnings
+			// logboek.Context(ctx).Warn().LogF("WARNING: Got an error when inspecting repo image %q: %s\n", reference, err)
+			return nil, nil
+		}
+
+		if IsNameUnknownError(err) {
 			return nil, nil
 		}
 		return imgInfo, err
@@ -138,7 +160,7 @@ func (api *api) list(reference string) ([]string, error) {
 		return nil, fmt.Errorf("parsing repo %q: %v", reference, err)
 	}
 
-	tags, err := remote.List(repo, remote.WithAuthFromKeychain(authn.DefaultKeychain), remote.WithTransport(api.getHttpTransport()))
+	tags, err := remote.List(repo, api.defaultRemoteOptions()...)
 	if err != nil {
 		return nil, fmt.Errorf("reading tags for %q: %v", repo, err)
 	}
@@ -152,7 +174,7 @@ func (api *api) deleteImageByReference(reference string) error {
 		return fmt.Errorf("parsing reference %q: %v", reference, err)
 	}
 
-	if err := remote.Delete(r, remote.WithAuthFromKeychain(authn.DefaultKeychain), remote.WithTransport(api.getHttpTransport())); err != nil {
+	if err := remote.Delete(r, api.defaultRemoteOptions()...); err != nil {
 		return fmt.Errorf("deleting image %q: %v", r, err)
 	}
 
@@ -249,6 +271,10 @@ func (api *api) parseReferenceOptions() []name.Option {
 	}
 
 	return options
+}
+
+func (api *api) defaultRemoteOptions() []remote.Option {
+	return []remote.Option{remote.WithAuthFromKeychain(authn.DefaultKeychain), remote.WithTransport(api.getHttpTransport())}
 }
 
 func (api *api) getHttpTransport() (transport http.RoundTripper) {

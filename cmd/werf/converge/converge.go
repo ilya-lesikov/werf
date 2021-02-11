@@ -3,12 +3,14 @@ package converge
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/werf/werf/pkg/giterminism_manager"
 
 	"github.com/werf/werf/pkg/deploy/helm/command_helpers"
+	"github.com/werf/werf/pkg/deploy/helm/maintenance_helper"
 
 	cmd_helm "helm.sh/helm/v3/cmd/helm"
 	"helm.sh/helm/v3/pkg/action"
@@ -132,6 +134,7 @@ werf converge --repo registry.mydomain.com/web --env production`,
 	common.SetupReportPath(&commonCmdData, cmd)
 	common.SetupReportFormat(&commonCmdData, cmd)
 
+	common.SetupUseCustomTag(&commonCmdData, cmd)
 	common.SetupVirtualMerge(&commonCmdData, cmd)
 	common.SetupVirtualMergeFromCommit(&commonCmdData, cmd)
 	common.SetupVirtualMergeIntoCommit(&commonCmdData, cmd)
@@ -233,7 +236,7 @@ func run(ctx context.Context, giterminismManager giterminism_manager.Interface) 
 	}
 	defer tmp_manager.ReleaseProjectDir(projectTmpDir)
 
-	buildOptions, err := common.GetBuildOptions(&commonCmdData, werfConfig)
+	buildOptions, err := common.GetBuildOptions(&commonCmdData, giterminismManager, werfConfig)
 	if err != nil {
 		return err
 	}
@@ -282,7 +285,12 @@ func run(ctx context.Context, giterminismManager giterminism_manager.Interface) 
 
 		if err := conveyorWithRetry.WithRetryBlock(ctx, func(c *build.Conveyor) error {
 			if *commonCmdData.SkipBuild {
-				if err := c.ShouldBeBuilt(ctx); err != nil {
+				shouldBeBuiltOptions, err := common.GetShouldBeBuiltOptions(&commonCmdData, giterminismManager, werfConfig)
+				if err != nil {
+					return err
+				}
+
+				if err := c.ShouldBeBuilt(ctx, shouldBeBuiltOptions); err != nil {
 					return err
 				}
 			} else {
@@ -310,6 +318,26 @@ func run(ctx context.Context, giterminismManager giterminism_manager.Interface) 
 
 	namespace, err := common.GetKubernetesNamespace(*commonCmdData.Namespace, *commonCmdData.Environment, werfConfig)
 	if err != nil {
+		return err
+	}
+
+	kubeConfigOptions := kube.KubeConfigOptions{
+		Context:          *commonCmdData.KubeContext,
+		ConfigPath:       *commonCmdData.KubeConfig,
+		ConfigDataBase64: *commonCmdData.KubeConfigBase64,
+	}
+
+	actionConfig := new(action.Configuration)
+	if err := helm.InitActionConfig(ctx, common.GetOndemandKubeInitializer(), namespace, cmd_helm.Settings, actionConfig, helm.InitActionConfigOptions{
+		StatusProgressPeriod:      time.Duration(*commonCmdData.StatusProgressPeriodSeconds) * time.Second,
+		HooksStatusProgressPeriod: time.Duration(*commonCmdData.HooksStatusProgressPeriodSeconds) * time.Second,
+		KubeConfigOptions:         kubeConfigOptions,
+		ReleasesHistoryMax:        *commonCmdData.ReleasesHistoryMax,
+	}); err != nil {
+		return err
+	}
+
+	if err := helm2ReleaseExistanceCheckGuard(ctx, releaseName, namespace, actionConfig, kubeConfigOptions); err != nil {
 		return err
 	}
 
@@ -342,7 +370,13 @@ func run(ctx context.Context, giterminismManager giterminism_manager.Interface) 
 	if err := wc.SetWerfConfig(werfConfig); err != nil {
 		return err
 	}
-	if vals, err := chart_extender.GetServiceValues(ctx, werfConfig.Meta.Project, imagesRepository, imagesInfoGetters, chart_extender.ServiceValuesOptions{Namespace: namespace, Env: *commonCmdData.Environment}); err != nil {
+
+	useCustomTagFunc, err := common.GetUseCustomTagFunc(&commonCmdData, giterminismManager, werfConfig)
+	if err != nil {
+		return err
+	}
+
+	if vals, err := chart_extender.GetServiceValues(ctx, werfConfig.Meta.Project, imagesRepository, imagesInfoGetters, chart_extender.ServiceValuesOptions{Namespace: namespace, Env: *commonCmdData.Environment, CustomTagFunc: useCustomTagFunc}); err != nil {
 		return fmt.Errorf("error creating service values: %s", err)
 	} else if err := wc.SetServiceValues(vals); err != nil {
 		return err
@@ -352,20 +386,6 @@ func run(ctx context.Context, giterminismManager giterminism_manager.Interface) 
 		if err := chart_extender.WriteDockerConfigJsonValue(ctx, wc.GetExtraValues(), *commonCmdData.DockerConfig); err != nil {
 			return fmt.Errorf("error writing docker config value into werf chart extra values: %s", err)
 		}
-	}
-
-	actionConfig := new(action.Configuration)
-	if err := helm.InitActionConfig(ctx, common.GetOndemandKubeInitializer(), namespace, cmd_helm.Settings, actionConfig, helm.InitActionConfigOptions{
-		StatusProgressPeriod:      time.Duration(*commonCmdData.StatusProgressPeriodSeconds) * time.Second,
-		HooksStatusProgressPeriod: time.Duration(*commonCmdData.HooksStatusProgressPeriodSeconds) * time.Second,
-		KubeConfigOptions: kube.KubeConfigOptions{
-			Context:          *commonCmdData.KubeContext,
-			ConfigPath:       *commonCmdData.KubeConfig,
-			ConfigDataBase64: *commonCmdData.KubeConfigBase64,
-		},
-		ReleasesHistoryMax: *commonCmdData.ReleasesHistoryMax,
-	}); err != nil {
-		return err
 	}
 
 	loader.GlobalLoadOptions = &loader.LoadOptions{
@@ -396,4 +416,60 @@ func run(ctx context.Context, giterminismManager giterminism_manager.Interface) 
 	return command_helpers.LockReleaseWrapper(ctx, releaseName, lockManager, func() error {
 		return helmUpgradeCmd.RunE(helmUpgradeCmd, []string{releaseName, filepath.Join(giterminismManager.ProjectDir(), chartDir)})
 	})
+}
+
+func helm2ReleaseExistanceCheckGuard(ctx context.Context, releaseName, namespace string, actionConfig *action.Configuration, kubeConfigOptions kube.KubeConfigOptions) error {
+	maintenanceOpts := maintenance_helper.MaintenanceHelperOptions{
+		KubeConfigOptions: kubeConfigOptions,
+	}
+
+	for _, val := range []string{
+		os.Getenv("WERF_HELM2_RELEASE_STORAGE_NAMESPACE"),
+		os.Getenv("WERF_HELM_RELEASE_STORAGE_NAMESPACE"),
+		os.Getenv("TILLER_NAMESPACE"),
+	} {
+		if val != "" {
+			maintenanceOpts.Helm2ReleaseStorageNamespace = val
+			break
+		}
+	}
+
+	for _, val := range []string{
+		os.Getenv("WERF_HELM2_RELEASE_STORAGE_TYPE"),
+		os.Getenv("WERF_HELM_RELEASE_STORAGE_TYPE"),
+	} {
+		if val != "" {
+			maintenanceOpts.Helm2ReleaseStorageType = val
+			break
+		}
+	}
+
+	helmMaintenanceHelper := maintenance_helper.NewMaintenanceHelper(actionConfig, maintenanceOpts)
+	if available, err := helmMaintenanceHelper.CheckHelm2StorageAvailable(ctx); err != nil {
+		return err
+	} else if available {
+		existingReleases, err := helmMaintenanceHelper.GetHelm2ReleasesList(ctx)
+		if err != nil {
+			return fmt.Errorf("error getting existing helm 2 releases to perform check: %s", err)
+		}
+		for _, existingReleaseName := range existingReleases {
+			if releaseName == existingReleaseName {
+				return fmt.Errorf(`found existing helm 2 release with the same name %q: cannot continue converge
+
+Please start a migration of your existing helm 2 release to helm 3 manually with the following command:
+
+    werf helm migrate2to3 --release %s --target-namespace %s --help
+
+### CAUTION! ###
+
+ 1. There is no way back after release has been migrated to helm 3.
+ 2. Check release and namespace params are set to correct values.
+ 3. Check other options of the migrate2to3 command to configure non-standard settings of the helm 2 release storage if needed.
+
+`, releaseName, releaseName, namespace)
+			}
+		}
+	}
+
+	return nil
 }

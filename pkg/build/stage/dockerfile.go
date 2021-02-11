@@ -611,7 +611,7 @@ func (s *DockerfileStage) PrepareImage(ctx context.Context, c Conveyor, _, img c
 }
 
 func (s *DockerfileStage) prepareContextArchive(ctx context.Context, giterminismManager giterminism_manager.Interface) (string, error) {
-	archive, err := giterminismManager.LocalGitRepo().CreateArchive(ctx, git_repo.ArchiveOptions{
+	archive, err := giterminismManager.LocalGitRepo().GetOrCreateArchive(ctx, git_repo.ArchiveOptions{
 		FilterOptions: git_repo.FilterOptions{
 			BasePath: filepath.Join(giterminismManager.RelativeToGitProjectDir(), s.context),
 		},
@@ -742,11 +742,16 @@ func (s *DockerfileStage) calculateFilesChecksumWithGit(ctx context.Context, git
 entryNotFoundInGitRepository:
 	wildcardsPathMatcher := path_matcher.NewSimplePathMatcher(s.dockerignorePathMatcher.BaseFilepath(), wildcards, false)
 
+	localGitRepository, err := giterminismManager.LocalGitRepo().PlainOpen()
+	if err != nil {
+		return "", err
+	}
+
 	var lsTreeResultChecksum string
 	if s.mainLsTreeResult != nil {
 		logProcess := logboek.Context(ctx).Debug().LogProcess("ls-tree (%s)", wildcardsPathMatcher.String())
 		logProcess.Start()
-		lsTreeResult, err := s.mainLsTreeResult.LsTree(ctx, wildcardsPathMatcher)
+		lsTreeResult, err := s.mainLsTreeResult.LsTree(ctx, localGitRepository, wildcardsPathMatcher)
 		if err != nil {
 			logProcess.Fail()
 			return "", err
