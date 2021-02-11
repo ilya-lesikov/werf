@@ -81,13 +81,40 @@ func AddContextAddFileToContextArchive(ctx context.Context, originalArchivePath 
 	pathsToExcludeFromSourceArchive := contextAddFile
 	if err := util.CreateArchiveBasedOnAnotherOne(ctx, originalArchivePath, destinationArchivePath, pathsToExcludeFromSourceArchive, func(tw *tar.Writer) error {
 		for _, contextAddFile := range contextAddFile {
-			sourceFilePath := filepath.Join(projectDir, contextDir, contextAddFile)
-			tarEntryName := filepath.ToSlash(contextAddFile)
-			if err := util.CopyFileIntoTar(tw, tarEntryName, sourceFilePath); err != nil {
-				return fmt.Errorf("unable to add contextAddFile %q to archive %q: %s", sourceFilePath, destinationArchivePath, err)
+			contextAddFilePath := filepath.Join(projectDir, contextDir, contextAddFile)
+
+			contextAddFileInfo, err := os.Lstat(contextAddFilePath)
+			if err != nil {
+				return fmt.Errorf("unable to get file info for contextAddFile %q: %s", contextAddFilePath, err)
 			}
 
-			logboek.Context(ctx).Debug().LogF("Extra file was added: %q\n", tarEntryName)
+			var filesToCopy []string
+			if contextAddFileInfo.IsDir() {
+				if err := filepath.Walk(contextAddFilePath, func(path string, fileInfo os.FileInfo, err error) error {
+					if err != nil {
+						return err
+					}
+					if fileInfo.IsDir() {
+						return nil
+					}
+					filesToCopy = append(filesToCopy, path)
+					logboek.Context(ctx).Debug().LogF("Extra file %q is going to be added to the current context\n", path)
+					return nil
+				}); err != nil {
+					return fmt.Errorf("error occured when recursively walking the contextAddFile dir %q: %s", contextAddFilePath, err)
+				}
+			} else {
+				filesToCopy = []string{contextAddFilePath}
+				logboek.Context(ctx).Debug().LogF("Extra file %q is going to be added to the current context\n", contextAddFilePath)
+			}
+
+			for _, fileToCopy := range filesToCopy {
+				tarEntryName := filepath.ToSlash(fileToCopy)
+				if err := util.CopyFileIntoTar(tw, tarEntryName, fileToCopy); err != nil {
+					return fmt.Errorf("unable to add contextAddFile %q to archive %q: %s", fileToCopy, destinationArchivePath, err)
+				}
+				logboek.Context(ctx).Debug().LogF("Extra file was added to the current context: %q\n", tarEntryName)
+			}
 		}
 
 		return nil
