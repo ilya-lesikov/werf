@@ -1,6 +1,5 @@
 ---
 title: Integration with GitHub Actions
-sidebar: documentation
 permalink: documentation/advanced/ci_cd/github_actions.html
 author: Sergey Lazarev <sergey.lazarev@flant.com>, Alexey Igrychev <alexey.igrychev@flant.com>
 ---
@@ -13,7 +12,7 @@ The workflow in the repository (a set of GitHub workflow configurations) will be
 
 * `converge` — the job to build, publish, and deploy an application for one of the cluster tiers;
 * `dismiss` — the job to delete an application (it is used for review environments only);
-* `cleanup` — the job to clean up the stages storage and the Docker registry.
+* `cleanup` — the job to clean up the stages storage and the container registry.
 
 Jobs are based on comprehensive GitHub Actions, [werf/actions](https://github.com/werf/actions), that include all the necessary steps for setting up a specific environment and running required werf commands. Below, we will discuss examples of their use (detailed information is available in the related repository).
 
@@ -72,7 +71,7 @@ The action `werf/actions/converge` combines all the necessary steps, sets up an 
 {% raw %}
 ```yaml
 - name: Converge
-  uses: werf/actions/converge@master
+  uses: werf/actions/converge@v1.2
   with:
     env: ANY_ENV_NAME
     kube-config-base64-data: ${{ secrets.KUBE_CONFIG_BASE64_DATA }}
@@ -90,24 +89,24 @@ The `kubectl` interface is already pre-installed on GitHub virtual machines, so 
 {% raw %}
 ```yaml
 - name: Converge
-  uses: werf/actions/converge@master
+  uses: werf/actions/converge@v1.2
   with:
     kube-config-base64-data: ${{ secrets.KUBE_CONFIG_BASE64_DATA }}
 ```
 {% endraw %}
 
-Job configuring is quite simple, so we prefer to focus on what it lacks — an explicit authorization in the Docker registry, and calling the `docker login`.
+Job configuring is quite simple, so we prefer to focus on what it lacks — an explicit authorization in the container registry, and calling the `docker login`.
 
-In the simplest case, if an [integrated Github Packages-like Docker registry](https://help.github.com/en/packages/using-github-packages-with-your-projects-ecosystem/configuring-docker-for-use-with-github-packages) is used, then the authorization is performed automatically when the `werf ci-env` command is invoked. This command is run with several required arguments such as GitHub environment variables, the [`GITHUB_TOKEN` secret](https://help.github.com/en/actions/configuring-and-managing-workflows/authenticating-with-the-github_token#about-the-github_token-secret) (you have to explicitly declare it), and the name of the user (`GITHUB_ACTOR`) who started the workflow process.
+In the simplest case, if an [integrated Github Packages-like container registry](https://help.github.com/en/packages/using-github-packages-with-your-projects-ecosystem/configuring-docker-for-use-with-github-packages) is used, then the authorization is performed automatically when the `werf ci-env` command is invoked. This command is run with several required arguments such as GitHub environment variables, the [`GITHUB_TOKEN` secret](https://help.github.com/en/actions/configuring-and-managing-workflows/authenticating-with-the-github_token#about-the-github_token-secret) (you have to explicitly declare it), and the name of the user (`GITHUB_ACTOR`) who started the workflow process.
 
-If there is a need to perform authorization using custom credentials or in an external Docker registry, then you have to use a ready-made action tailored to your implementation (or just run `docker login` before using werf).
+If there is a need to perform authorization using custom credentials or in an external container registry, then you have to use a ready-made action tailored to your container registry (or just run `docker login` before using werf).
 
 Now, let us explore other parameters used in this step:
 
 {% raw %}
 ```yaml
 - name: Converge
-  uses: werf/actions/converge@master
+  uses: werf/actions/converge@v1.2
   with:
     env: ANY_ENV_NAME
   env:
@@ -370,7 +369,7 @@ Most cleaning policies in werf are based on git primitives (commit, branch, and 
   run: git fetch --prune --unshallow
 ```
   
-werf has an efficient built-in cleanup mechanism to avoid overflowing the Docker registry and the disk space on the building node with outdated and unused images. You can learn more about the werf's cleanup functionality [here]({{ "documentation/advanced/cleanup.html" | true_relative_url }}).
+werf has an efficient built-in cleanup mechanism to avoid overflowing the container registry and the disk space on the building node with outdated and unused images. You can learn more about the werf's cleanup functionality [here]({{ "documentation/advanced/cleanup.html" | true_relative_url }}).
 
 ## Complete set of configurations for ready-made workflows
 

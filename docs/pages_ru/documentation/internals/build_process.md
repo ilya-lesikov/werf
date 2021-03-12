@@ -1,58 +1,63 @@
 ---
 title: Процесс сборки
-sidebar: documentation
 permalink: documentation/internals/build_process.html
 ---
 
 Сборочный процесс werf для образов, описанных в [werf.yaml]({{ "documentation/reference/werf_yaml.html" | true_relative_url }}), подразумевает [последовательную сборку стадий]({{ "documentation/internals/stages_and_storage.html" | true_relative_url }}#конвеер-стадий) для описанных образов.
 
-Несмотря на то, что [_конвейеры стадий_]({{ "documentation/internals/stages_and_storage.html" | true_relative_url }}#конвеер-стадий) для Dockerfile-образа, Stapel-образа и Stapel-артефакта отличаются, каждая стадия подчиняется общим правилам [выборки из хранилища](#выборка-стадий), [сохранения](#сохранение-стадий-в-хранилище), а также [работы кеша и блокировок]({{ "documentation/advanced/synchronization.html" | true_relative_url }}) в параллельных запусках.
+Несмотря на то, что [_конвейеры стадий_]({{ "documentation/internals/stages_and_storage.html#конвеер-стадий" | true_relative_url }}) для Dockerfile-образа, Stapel-образа и Stapel-артефакта отличаются, каждая стадия подчиняется общим правилам [выборки из хранилища](#выборка-стадий), [сохранения](#сохранение-стадий-в-хранилище), а также [работы кеша и блокировок]({{ "documentation/advanced/synchronization.html" | true_relative_url }}) в параллельных запусках.
 
 ## Сборка стадии Dockerfile-образа
 
-Для сборки Dockerfile-образа werf создает единственную [стадию]({{ "documentation/internals/stages_and_storage.html" | true_relative_url }}#конвеер-стадий) — `dockerfile`.
+Для сборки Dockerfile-образа werf создает единственную [стадию]({{ "documentation/internals/stages_and_storage.html#конвеер-стадий" | true_relative_url }}) — `dockerfile`.
 
 В настоящий момент, при сборке стадии werf использует стандартные команды встроенного в Docker клиента (это аналогично выполнению команды `docker build`), а также аргументы, которые пользователь описывает в `werf.yaml`. Кэш, создаваемый при сборке, используется, как и при обычной сборке, без помощи werf.
 
-Подробнее о файле конфигурации сборки `werf.yaml` смотри в [соответствующем разделе]({{ "documentation/reference/werf_yaml.html" | true_relative_url }}#сборщик-dockerfile).
+Интересной особенностью werf является то, что в качестве сборочного контекста используются файлы не из директории проекта, а из git-репозитория. Все файлы, которые содержатся в директории, заданной директивой `context` (по умолчанию это директория проекта), берутся из текущего коммита репозитория проекта (подробнее про гитерминизм можно почитать [в отдельной статье]({{ "documentation/advanced/giterminism.html#dockerfile-образ" | true_relative_url }})).
+
+В итоге сборку стадии `dockerfile` можно представить следующим образом:
+
+```shell
+docker build --file=Dockerfile - < ~/.werf/service/tmp/context/4b9d6bc2-a549-42f9-86b8-4032c146f888
+```
+
+Подробнее о файле конфигурации сборки `werf.yaml` в [соответствующем разделе]({{ "documentation/reference/werf_yaml.html#сборщик-dockerfile" | true_relative_url }}).
 
 ## Сборка стадии Stapel-образа и Stapel-артефакта
 
-При сборке стадии предполагается, что инструкции стадии будут запускаться в контейнере, основанном на предыдущей собранной стадии. Такой контейнер будет упоминаться далее как **сборочный контейнер**.
+При сборке стадии предполагается, что инструкции стадии будут запускаться в контейнере, основанном на предыдущей собранной стадии или на [базовом образе]({{ "documentation/advanced/building_images_with_stapel/base_image.html#from-fromlatest" | true_relative_url }}). Такой контейнер будет упоминаться далее как **сборочный контейнер**.
 
-Перед запуском _сборочного контейнера_ werf подготавливает набор инструкций, который зависит от типа стадии и содержит как внутренние команды werf, так и пользовательские команды, указанные в конфигурации `werf.yaml`. Например, werf может добавлять в список инструкций команды применения патча, измененных примонтированных файлов (такие патчи werf делает с помощью CLI команд git).
+Перед запуском _сборочного контейнера_ werf подготавливает набор инструкций, который зависит от типа стадии и содержит как служебные команды werf, так и [пользовательские]({{ "documentation/advanced/building_images_with_stapel/assembly_instructions.html" | true_relative_url }}), указанные в конфигурации `werf.yaml`. Например, среди служебных команд может быть добавление файлов, наложение патчей, запуск ansible заданий и т.п. 
 
-При запуске _сборочного контейнера_ [пробрасывается сокет ssh-агента с хоста]({{ "documentation/internals/integration_with_ssh_agent.html" | true_relative_url }}), а также могут использоваться [пользовательские маунты]({{ "documentation/advanced/building_images_with_stapel/mount_directive.html" | true_relative_url }}).
+Stapel-сборщик использует свой набор инструментов и библиотек, и никак не зависит от базового образа. При запуске _сборочного контейнера_ werf монтирует всё необходимое из специального служебного образа `flant/werf-stapel`. Подробнее об образе можно прочитать в [соответствующей статье]({{ "documentation/internals/development/stapel_image.html" | true_relative_url }}).
 
-Для сборки Stapel-сборщик использует свой набор инструментов и библиотек, никак не зависит от базового образа. При запуске _сборочного контейнера_ werf монтирует специальный сервисный образ `flant/werf-stapel`. Подробнее об образе можно прочитать в [соответствующей статье]({{ "documentation/internals/development/stapel_image.html" | true_relative_url }}).
+В _сборочный контейнер_ [пробрасывается сокет ssh-агента с хоста]({{ "documentation/internals/integration_with_ssh_agent.html" | true_relative_url }}), а также могут использоваться [пользовательские маунты]({{ "documentation/advanced/building_images_with_stapel/mount_directive.html" | true_relative_url }}).
 
-Также стоит отметить, что werf игнорирует значения манифеста базового образа при сборке:
+Также стоит отметить, что при сборке werf игнорирует некоторые параметры манифеста базового образа, перетирая их определёнными значениями:
 - `--user=0:0`;
 - `--workdir=/`;
 - `--entrypoint=/.werf/stapel/embedded/bin/bash`.
 
-В итоге, запуск _сборочного контейнера_ выглядит следующим образом:
+В итоге запуск _сборочного контейнера_ произвольной стадии можно представить следующим образом:
 ```shell
 docker run \
-  --name=werf.build.offtur4fay \
   --volume=/tmp/ssh-ln8yCMlFLZob/agent.17554:/.werf/tmp/ssh-auth-sock \
   --volumes-from=stapel_0.6.1 \
   --env=SSH_AUTH_SOCK=/.werf/tmp/ssh-auth-sock \
   --user=0:0 \ 
   --workdir=/ \
   --entrypoint=/.werf/stapel/embedded/bin/bash \
-  --env=COLUMNS=146 \
   sha256:d6e46aa2470df1d32034c6707c8041158b652f38d2a9ae3d7ad7e7532d22ebe0 \
   -ec eval $(echo c2V0IC14 | /.werf/stapel/embedded/bin/base64 --decode)
 ```
 
-Подробнее о файле конфигурации сборки `werf.yaml` смотри в [соответствующем разделе]({{ "documentation/reference/werf_yaml.html" | true_relative_url }}#stapel-сборщик).
+Подробнее о файле конфигурации сборки `werf.yaml` в [соответствующем разделе]({{ "documentation/reference/werf_yaml.html#stapel-сборщик" | true_relative_url }}).
 
 ### Как сборщик Stapel работает с CMD и ENTRYPOINT
 
 Для сборки стадии werf запускает контейнер со служебными значениями `CMD` и `ENTRYPOINT` а затем, заменяет их значениями [базового образа]({{ "documentation/advanced/building_images_with_stapel/base_image.html" | true_relative_url }}). Если в базовом образе эти значения не установлены, werf сбрасывает их следующим образом:
-* `[]` для `CMD`;
-* `[""]` для `ENTRYPOINT`.
+- `[]` для `CMD`;
+- `[""]` для `ENTRYPOINT`.
 
 Также werf сбрасывает (использует специальные пустые значения) значение `ENTRYPOINT` базового образа, если указано значение `CMD` в конфигурации (`docker.CMD`).
 
@@ -62,8 +67,8 @@ docker run \
 
 Алгоритм выборки стадии в werf можно представить следующим образом:
 
- 1. Рассчитывается [дайджест стадии]({{ "documentation/internals/stages_and_storage.html" | true_relative_url }}#дайджест-стадии).
- 2. Выбираются все стадии, подходящие под дайджест, т.к. c одним дайджестом может быть связанно несколько стадий в [хранилище]({{ "documentation/internals/stages_and_storage.html#хранилище" | true_relative_url }}).
+ 1. Рассчитывается [дайджест стадии]({{ "documentation/internals/stages_and_storage.html#дайджест-стадии" | true_relative_url }}).
+ 2. Выбираются все стадии, подходящие под дайджест, т.к. с одним дайджестом может быть связанно несколько стадий в [хранилище]({{ "documentation/internals/stages_and_storage.html#хранилище" | true_relative_url }}).
  3. Выбирается старейший по времени `TIMESTAMP_MILLISEC` (подробнее про именование стадий [здесь]({{ "documentation/internals/stages_and_storage.html#именование-стадий" | true_relative_url }})).
 
 ### Дополнение для Stapel-образов и Stapel-артефактов
@@ -83,3 +88,37 @@ werf использует алгоритм оптимистичных блоки
 Другими словами: первый процесс, который закончит сборку новой стадии (самый быстрый процесс) получит шанс сохранить собранный образ в хранилище. Медленный процесс сборки не будет блокировать более быстрые процессы в параллельной и распределенной среде.
 
 В процессе выборки и сохранения новых стадий в хранилище werf использует [менеджер блокировок]({{ "documentation/advanced/synchronization.html" | true_relative_url }}) для координации работы нескольких процессов werf.
+
+## Параллельная сборка
+
+Параллельная сборка в werf регулируется двумя параметрами `-p, --parallel` и `--parallel-tasks-limit`. По умолчанию параллельная сборка включена и собирается не более 5 образов одновременно.
+
+После построение дерева зависимостей образов, werf разбивает сборку на этапы. Каждый этап содержит набор независимых образов, которые могут собираться параллельно.
+
+```shell
+┌ Concurrent builds plan (no more than 5 images at the same time)
+│ Set #0:
+│ - ⛵ image common-base
+│ - 🛸 artifact jq
+│ - 🛸 artifact libjq
+│ - 🛸 artifact kcov
+│ 
+│ Set #1:
+│ - ⛵ image base-for-go
+│ 
+│ Set #2:
+│ - 🛸 artifact terraform-provider-vsphere
+│ - 🛸 artifact terraform-provider-gcp
+│ - 🛸 artifact candictl
+│ - ⛵ image candictl-tests
+│ - 🛸 artifact helm
+│ - 🛸 artifact controller
+│ 
+│ Set #3:
+│ - ⛵ image base
+│ 
+│ Set #4:
+│ - ⛵ image tests
+│ - ⛵ image app
+└ Concurrent builds plan (no more than 5 images at the same time)
+```

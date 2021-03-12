@@ -41,7 +41,14 @@ werf ci-env CI_SYSTEM [options]
             Custom configuration templates directory (default $WERF_CONFIG_TEMPLATES_DIR or .werf   
             in working directory)
       --dev=false
-            Enable developer mode (default $WERF_DEV)
+            Enable development mode (default $WERF_DEV).
+            The mode allows working with project files without doing redundant commits during       
+            debugging and development
+      --dev-mode='simple'
+            Set development mode (default $WERF_DEV_MODE or simple).
+            Two development modes are supported:
+            - simple: for working with the worktree state of the git repository
+            - strict: for working with the index state of the git repository
       --dir=''
             Use specified project directory where project’s werf.yaml and other configuration files 
             should reside (default $WERF_DIR or current working directory)
@@ -78,9 +85,8 @@ werf ci-env CI_SYSTEM [options]
             Enable verbose output (default $WERF_LOG_VERBOSE).
       --loose-giterminism=false
             Loose werf giterminism mode restrictions (NOTE: not all restrictions can be removed,    
-            more info                                                                               
-            https://werf.io/v1.2-alpha/documentation/advanced/configuration/giterminism.html,       
-            default $WERF_LOOSE_GITERMINISM)
+            more info https://werf.io/v1.2-alpha/documentation/advanced/giterminism.html, default   
+            $WERF_LOOSE_GITERMINISM)
   -o, --output-file-path=''
             Write to custom file (default $WERF_OUTPUT_FILE_PATH).
       --shell=''

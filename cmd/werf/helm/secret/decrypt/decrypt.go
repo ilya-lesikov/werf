@@ -56,7 +56,7 @@ Encryption key should be in $WERF_SECRET_KEY or .werf_secret_key file`),
 	common.SetupTmpDir(&commonCmdData, cmd)
 	common.SetupHomeDir(&commonCmdData, cmd)
 
-	common.SetupGiterminismInspectorOptions(&commonCmdData, cmd)
+	common.SetupGiterminismOptions(&commonCmdData, cmd)
 
 	common.SetupLogOptions(&commonCmdData, cmd)
 
@@ -76,16 +76,16 @@ func runSecretDecrypt(ctx context.Context) error {
 
 	workingDir := common.GetWorkingDir(&commonCmdData)
 
-	return secretDecrypt(ctx, secrets_manager.NewSecretsManager(workingDir, secrets_manager.SecretsManagerOptions{}))
+	return secretDecrypt(ctx, secrets_manager.NewSecretsManager(secrets_manager.SecretsManagerOptions{}), workingDir)
 }
 
-func secretDecrypt(ctx context.Context, m *secrets_manager.SecretsManager) error {
+func secretDecrypt(ctx context.Context, m *secrets_manager.SecretsManager, workingDir string) error {
 	var encodedData []byte
 	var data []byte
 	var err error
 
 	var encoder *secret.YamlEncoder
-	if enc, err := m.GetYamlEncoder(ctx); err != nil {
+	if enc, err := m.GetYamlEncoder(ctx, workingDir); err != nil {
 		return err
 	} else {
 		encoder = enc

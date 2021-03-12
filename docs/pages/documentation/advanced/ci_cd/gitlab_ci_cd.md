@@ -1,6 +1,5 @@
 ---
 title: Integration with GitLab CI/CD
-sidebar: documentation
 permalink: documentation/advanced/ci_cd/gitlab_ci_cd.html
 author: Artem Kladov <artem.kladov@flant.com>, Alexey Igrychev <alexey.igrychev@flant.com>
 ---
@@ -14,7 +13,7 @@ A typical pipeline includes the following stages:
 * `build` — stage for building and publishing app images;
 * `deploy` — stage to deploy an application to one of the cluster environments;
 * `dismiss` — stage for deleting an application in the review environment;
-* `cleanup` — stage to clean up the stages-storage and the Docker registry.
+* `cleanup` — stage to clean up the stages storage and the container registry.
 
 The set of tiers (as well as GitLab environments) in a Kubernetes cluster may vary depending on multiple factors. In this article, we will discuss various options of setting up environments for the following tiers:
 
@@ -40,7 +39,7 @@ There are various configuration options for deploying to review, staging, and pr
 
 * Running Kubernetes cluster with the configured kubectl CLI tool;
 * GitLab server version higher than 10.x (or account on [SaaS GitLab](https://gitlab.com/));
-* The Docker registry (either integrated in GitLab or dedicated);
+* The container registry (either integrated in GitLab or dedicated);
 * An application you can successfully build and deploy with werf;
 * A good understanding of the [fundamentals of GitLab CI/CD](https://docs.gitlab.com/ee/ci/).
 
@@ -49,7 +48,7 @@ There are various configuration options for deploying to review, staging, and pr
 ![scheme]({% asset howto_gitlabci_scheme.png @path %})
 
 * Kubernetes cluster
-* GitLab with an integrated Docker registry.
+* GitLab with an integrated container registry.
 * A node (or a group of nodes) with werf and dependencies pre-installed.
 
 You can run werf in the Docker container, however, this method is not supported. You can find more information and discuss this approach in the relevant [issue](https://github.com/werf/werf/issues/1926). In this example (and in general), we recommend you to use the _shell executor_.
@@ -60,7 +59,7 @@ werf will use the default `kubectl` context if there is no context specified via
 werf requires access to the following nodes it uses:
 
 - to the git repository where the application code is stored;
-- to the Docker registry;
+- to the container registry;
 - to the Kubernetes cluster.
 
 ### Seting up the runner
@@ -124,15 +123,15 @@ Build and Publish:
 ```
 {% endraw %}
 
-It should be noted that cleaning up stages and the Docker registry implies running the corresponding task according to a schedule. Since building images during the cleanup is not needed, you should specify `except: [schedules]` so that the build stage is not triggered when the pipeline is running on a schedule.
+It should be noted that cleaning up stages and the container registry implies running the corresponding task according to a schedule. Since building images during the cleanup is not needed, you should specify `except: [schedules]` so that the build stage is not triggered when the pipeline is running on a schedule.
 
-The task configuration is quite simple, that is why we prefer to focus on what it lacks — an explicit authorization in the Docker registry, and calling the `docker login`.
+The task configuration is quite simple, that is why we prefer to focus on what it lacks — an explicit authorization in the container registry, and calling the `docker login`.
 
-In the simplest case, if an integrated Docker registry is used, then the authorization is performed automatically when the `werf ci-env` command is executed. The `CI_JOB_TOKEN` (you can learn more about the GitLab job permissions model [here](https://docs.gitlab.com/ee/user/project/new_ci_build_permissions_model.html)) and `CI_REGISTRY_IMAGE` GitLab environment variables act as arguments in this case.
+In the simplest case, if an integrated container registry is used, then the authorization is performed automatically when the `werf ci-env` command is executed. The `CI_JOB_TOKEN` (you can learn more about the GitLab job permissions model [here](https://docs.gitlab.com/ee/user/project/new_ci_build_permissions_model.html)) and `CI_REGISTRY_IMAGE` GitLab environment variables act as arguments in this case.
 
 As a result of the `werf ci-env` command, a temporary docker config is created. It is used by all the commands in the shell session (including docker). It means that parallel tasks do not overlap when using docker, and the temporary token is preserved (not overwritten) in the configuration.
 
-If you need to authorize using the custom credentials, the `docker login` command must be executed after invoking `werf ci-env` (this [article]({{ "documentation/advanced/supported_registry_implementations.html#docker-authorization" | true_relative_url }}) sheds more light on authorization).
+If you need to authorize using the custom credentials, the `docker login` command must be executed after invoking `werf ci-env` (this [article]({{ "documentation/advanced/supported_container_registries.html#docker-authorization" | true_relative_url }}) sheds more light on authorization).
 
 ## Deploying an application
 
@@ -219,7 +218,7 @@ The `Review` job defines the deployment of a review release to a dynamic environ
 
 The `Stop Review` job deletes the review release and shuts down the GitLab environment (`action: stop`): werf deletes the helm release and the associated Kubernetes namespace with all its contents ([werf dismiss]({{ "documentation/reference/cli/werf_dismiss.html" | true_relative_url }})). You can run the `Stop Review` job manually after the deployment to the review tier is complete, or automatically via the GitLab server (for example, when the corresponding branch is deleted as a result of merging with master, provided that the appropriate option is set in the GitLab interface).
 
-The `werf dismiss` command requires werf.yaml to work, because this file contains [templates for the release name and the namespace]({{ "documentation/advanced/helm/basics.html" | true_relative_url }}). It is not possible to use the source code from the git when deleting a branch, that is why we use werf.yaml (it was saved when the Review job was running), while pulling changes from git is disabled (`GIT_STRATEGY: none`).
+The `werf dismiss` command requires werf.yaml to work, because this file contains [templates for the release name and the namespace]({{ "documentation/advanced/helm/releases/naming.html" | true_relative_url }}). It is not possible to use the source code from the git when deleting a branch, that is why we use werf.yaml (it was saved when the Review job was running), while pulling changes from git is disabled (`GIT_STRATEGY: none`).
 
 Thus, by default, we have the following options for deleting the review environment:
 
@@ -535,9 +534,9 @@ Cleanup:
 ```
 {% endraw %}
 
-werf has an efficient built-in cleanup mechanism to avoid overflowing the Docker registry and the building node with outdated and unused images. You can learn more about the werf's cleanup functionality [here]({{ "documentation/advanced/cleanup.html" | true_relative_url }}).
+werf has an efficient built-in cleanup mechanism to avoid overflowing the container registry and the building node with outdated and unused images. You can learn more about the werf's cleanup functionality [here]({{ "documentation/advanced/cleanup.html" | true_relative_url }}).
 
-To use cleanup, you have to create a `Personal Access Token` in GitLab with the necessary permissions. This token will be used for authorization in the Docker registry before cleanup.
+To use cleanup, you have to create a `Personal Access Token` in GitLab with the necessary permissions. This token will be used for authorization in the container registry before cleanup.
 
 For the test project, you can create a `Personal Access Token` in your GitLab account. To do this, open the `Settings` page in GitLab (in your profile settings), then open the `Access Token` section. Enter the token name, select the `api` in the Scope section, and click the `Create personal access token` button to get the `Personal Access Token`.
 

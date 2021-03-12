@@ -2,11 +2,13 @@
 title: GitOps CLI-утилита
 permalink: /
 layout: default
+sidebar: none
+relation: site
 ---
 
 <div class="intro-scheme" id="intro-scheme">
     <div class="page__container intro-scheme__container">
-        <img src="/images/intro.svg" class="intro-scheme__scheme" alt="werf"/>
+        {% include intro.md %}
     </div>
 </div>
 

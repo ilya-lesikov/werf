@@ -2,9 +2,7 @@ package export
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 
 	"helm.sh/helm/v3/pkg/getter"
 
@@ -12,13 +10,11 @@ import (
 	"github.com/werf/werf/pkg/git_repo"
 	"github.com/werf/werf/pkg/werf/global_warnings"
 
-	"github.com/werf/werf/pkg/deploy/helm"
-
 	"github.com/werf/werf/pkg/deploy/secrets_manager"
 
 	"github.com/werf/werf/pkg/deploy/helm/chart_extender"
+	"github.com/werf/werf/pkg/deploy/helm/chart_extender/helpers"
 	cmd_helm "helm.sh/helm/v3/cmd/helm"
-	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/cli/values"
@@ -74,7 +70,7 @@ func NewCmd() *cobra.Command {
 
 	common.SetupDir(&commonCmdData, cmd)
 	common.SetupGitWorkTree(&commonCmdData, cmd)
-	common.SetupGiterminismInspectorOptions(&commonCmdData, cmd)
+	common.SetupGiterminismOptions(&commonCmdData, cmd)
 	common.SetupConfigTemplatesDir(&commonCmdData, cmd)
 	common.SetupConfigPath(&commonCmdData, cmd)
 	common.SetupEnvironment(&commonCmdData, cmd)
@@ -112,7 +108,6 @@ func NewCmd() *cobra.Command {
 	common.SetupReportPath(&commonCmdData, cmd)
 	common.SetupReportFormat(&commonCmdData, cmd)
 
-	common.SetupUseCustomTag(&commonCmdData, cmd)
 	common.SetupVirtualMerge(&commonCmdData, cmd)
 	common.SetupVirtualMergeFromCommit(&commonCmdData, cmd)
 	common.SetupVirtualMergeIntoCommit(&commonCmdData, cmd)
@@ -204,7 +199,7 @@ func runExport() error {
 		return err
 	}
 
-	buildOptions, err := common.GetBuildOptions(&commonCmdData, giterminismManager, werfConfig)
+	buildOptions, err := common.GetBuildOptions(&commonCmdData, werfConfig)
 	if err != nil {
 		return err
 	}
@@ -256,12 +251,7 @@ func runExport() error {
 
 		if err := conveyorWithRetry.WithRetryBlock(ctx, func(c *build.Conveyor) error {
 			if *commonCmdData.SkipBuild {
-				shouldBeBuiltOptions, err := common.GetShouldBeBuiltOptions(&commonCmdData, giterminismManager, werfConfig)
-				if err != nil {
-					return err
-				}
-
-				if err := c.ShouldBeBuilt(ctx, shouldBeBuiltOptions); err != nil {
+				if err := c.ShouldBeBuilt(ctx); err != nil {
 					return err
 				}
 			} else {
@@ -280,7 +270,7 @@ func runExport() error {
 		logboek.LogOptionalLn()
 	}
 
-	secretsManager := secrets_manager.NewSecretsManager(giterminismManager.ProjectDir(), secrets_manager.SecretsManagerOptions{DisableSecretsDecryption: *commonCmdData.IgnoreSecretKey})
+	secretsManager := secrets_manager.NewSecretsManager(secrets_manager.SecretsManagerOptions{DisableSecretsDecryption: *commonCmdData.IgnoreSecretKey})
 
 	wc := chart_extender.NewWerfChart(ctx, giterminismManager, secretsManager, chartDir, cmd_helm.Settings, chart_extender.WerfChartOptions{
 		SecretValueFiles: common.GetSecretValues(&commonCmdData),
@@ -294,20 +284,9 @@ func runExport() error {
 	if err := wc.SetWerfConfig(werfConfig); err != nil {
 		return err
 	}
-
-	useCustomTagFunc, err := common.GetUseCustomTagFunc(&commonCmdData, giterminismManager, werfConfig)
-	if err != nil {
-		return err
-	}
-
-	if vals, err := chart_extender.GetServiceValues(ctx, werfConfig.Meta.Project, imagesRepository, imagesInfoGetters, chart_extender.ServiceValuesOptions{Env: *commonCmdData.Environment, CustomTagFunc: useCustomTagFunc}); err != nil {
+	if vals, err := helpers.GetServiceValues(ctx, werfConfig.Meta.Project, imagesRepository, imagesInfoGetters, helpers.ServiceValuesOptions{Env: *commonCmdData.Environment}); err != nil {
 		return fmt.Errorf("error creating service values: %s", err)
 	} else if err := wc.SetServiceValues(vals); err != nil {
-		return err
-	}
-
-	actionConfig := new(action.Configuration)
-	if err := helm.InitActionConfig(ctx, nil, "", cmd_helm.Settings, actionConfig, helm.InitActionConfigOptions{}); err != nil {
 		return err
 	}
 
@@ -325,26 +304,13 @@ func runExport() error {
 		FileValues:   common.GetSetFile(&commonCmdData),
 	}
 
-	postRenderer, err := wc.GetPostRenderer()
-	if err != nil {
-		return err
-	}
-
-	helmTemplateCmd, _ := cmd_helm.NewTemplateCmd(actionConfig, ioutil.Discard, cmd_helm.TemplateCmdOptions{
-		PostRenderer: postRenderer,
-		ValueOpts:    valueOpts,
-	})
-	if err := helmTemplateCmd.RunE(helmTemplateCmd, []string{"RELEASE", filepath.Join(giterminismManager.ProjectDir(), chartDir)}); err != nil {
-		return err
-	}
-
 	destinationDir := cmdData.Destination
 	if destinationDir == "" {
 		destinationDir = wc.HelmChart.Metadata.Name
 	}
 
 	p := getter.All(cmd_helm.Settings)
-	if vals, err := valueOpts.MergeValues(p, loader.GlobalLoadOptions.ChartExtender); err != nil {
+	if vals, err := valueOpts.MergeValues(p, wc); err != nil {
 		return err
 	} else if _, err := wc.CreateNewBundle(ctx, destinationDir, vals); err != nil {
 		return fmt.Errorf("unable to create bundle: %s", err)

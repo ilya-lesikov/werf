@@ -3,6 +3,7 @@ title: Introduction
 permalink: introduction.html
 sidebar: documentation
 description: How werf works?
+relation: site
 ---
 
 {% asset introduction.css %}
@@ -84,21 +85,21 @@ werf is a CLI tool for implementing a full deployment cycle for your application
                 <a href="javascript:void(0)"
                     data-presentation-selector-option="6"
                     data-presentation-selector-stage="Converge">
-                    2. Read images that are already available in the Docker Registry.
+                    2. Read images that are already available in the container registry.
                 </a>
             </div>
             <div class="introduction-presentation__controls-selector-step">
                 <a href="javascript:void(0)"
                     data-presentation-selector-option="7"
                     data-presentation-selector-stage="Converge">
-                    3. Calculate the difference between images required for the current Git commit state and those that are already available in the Docker Registry.
+                    3. Calculate the difference between images required for the current Git commit state and those that are already available in the container registry.
                 </a>
             </div>
             <div class="introduction-presentation__controls-selector-step">
                 <a href="javascript:void(0)"
                     data-presentation-selector-option="8"
                     data-presentation-selector-stage="Converge">
-                    4. Build and publish only those images that do not exist in the Docker Registry (if any).
+                    4. Build and publish only those images that do not exist in the container registry (if any).
                 </a>
             </div>
             <div class="introduction-presentation__controls-selector-step">
@@ -234,11 +235,11 @@ At this step, werf calculates the target image names. Image names may change or 
 
 **Converge** is the process of building docker images (and re-building them in response to changes), deploying an application into the Kubernetes cluster (and re-deploying it when necessary), and making sure that the application is up and running.
 
-The `werf converge` command starts the converging process. The command can be invoked by a user, by a CI/CD system, or by an operator in response to changes in the state of an application in Git. The behavior of the `werf converge` command is fully deterministic and transparent from the standpoint of the Git repository. After the converge is complete, your application will be up and running in the state defined in the target Git commit. Typically, to roll back your application to the previous version, you only need to run the converge on the corresponding earlier commit (werf will use correct images for this commit).
+The `werf converge` command starts the converging process. The command can be invoked by a user, by a CI/CD system, or by an operator in response to changes in the state of an application in Git. The behavior of the `werf converge` command is fully deterministic and transparent from the standpoint of the Git repository (read more about giterminism [here]({{ "documentation/advanced/giterminism.html" | true_relative_url }})). After the converge command is complete, your application will be up and running in the state defined in the target Git commit. Typically, to roll back your application to the previous version, you only need to run the converge on the corresponding earlier commit (werf will use correct images for this commit).
 
 Run the following command in the root of your project to converge:
 
-```
+```shell
 werf converge --docker-repo myregistry.domain.org/example-app [--kube-config ~/.kube/config]
 ```
 

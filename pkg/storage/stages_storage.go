@@ -9,17 +9,16 @@ import (
 )
 
 const (
-	LocalStorageAddress             = ":local"
-	DefaultKubernetesStorageAddress = "kubernetes://werf-synchronization"
-	NamelessImageRecordTag          = "__nameless__"
+	LocalStorageAddress              = ":local"
+	DefaultKubernetesStorageAddress  = "kubernetes://werf-synchronization"
+	DefaultHttpSynchronizationServer = "https://synchronization.werf.io"
+	NamelessImageRecordTag           = "__nameless__"
 )
 
 type StagesStorage interface {
 	GetStagesIDs(ctx context.Context, projectName string) ([]image.StageID, error)
 	GetStagesIDsByDigest(ctx context.Context, projectName, digest string) ([]image.StageID, error)
 	GetStageDescription(ctx context.Context, projectName, digest string, uniqueID int64) (*image.StageDescription, error)
-	AddStageCustomTag(ctx context.Context, stageDescription *image.StageDescription, tag string) error
-	CheckStageCustomTag(ctx context.Context, stageDescription *image.StageDescription, tag string) error
 	DeleteStage(ctx context.Context, stageDescription *image.StageDescription, options DeleteImageOptions) error
 	FilterStagesAndProcessRelatedData(ctx context.Context, stageDescriptions []*image.StageDescription, options FilterStagesAndProcessRelatedDataOptions) ([]*image.StageDescription, error)
 

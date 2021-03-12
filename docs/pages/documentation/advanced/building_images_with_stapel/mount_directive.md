@@ -1,6 +1,5 @@
 ---
 title: Reducing image size and speeding up a build by mounts
-sidebar: documentation
 permalink: documentation/advanced/building_images_with_stapel/mount_directive.html
 author: Artem Kladov <artem.kladov@flant.com>, Alexey Igrychev <alexey.igrychev@flant.com>
 directive_summary: mount
@@ -36,3 +35,5 @@ The implementation allows inheriting mount points from [base image]({{ "document
 
 Also, on `from` stage werf cleans assembly container mount points in a [base image]({{ "documentation/advanced/building_images_with_stapel/base_image.html" | true_relative_url }}).
 Therefore, these folders are empty in an image.
+
+> By default, the use of the `fromPath` directive and `from: build_dir` are not allowed by giterminism (read more about it [here]({{ "/documentation/advanced/giterminism.html#mount" | true_relative_url }}))

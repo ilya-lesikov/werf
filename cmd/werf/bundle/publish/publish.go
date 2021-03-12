@@ -2,7 +2,6 @@ package publish
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -19,6 +18,7 @@ import (
 	"github.com/werf/werf/pkg/deploy/secrets_manager"
 
 	"github.com/werf/werf/pkg/deploy/helm/chart_extender"
+	"github.com/werf/werf/pkg/deploy/helm/chart_extender/helpers"
 	cmd_helm "helm.sh/helm/v3/cmd/helm"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart"
@@ -79,7 +79,7 @@ Published into container registry bundle can be rolled out by the "werf bundle" 
 
 	common.SetupDir(&commonCmdData, cmd)
 	common.SetupGitWorkTree(&commonCmdData, cmd)
-	common.SetupGiterminismInspectorOptions(&commonCmdData, cmd)
+	common.SetupGiterminismOptions(&commonCmdData, cmd)
 	common.SetupConfigTemplatesDir(&commonCmdData, cmd)
 	common.SetupConfigPath(&commonCmdData, cmd)
 	common.SetupEnvironment(&commonCmdData, cmd)
@@ -117,7 +117,6 @@ Published into container registry bundle can be rolled out by the "werf bundle" 
 	common.SetupReportPath(&commonCmdData, cmd)
 	common.SetupReportFormat(&commonCmdData, cmd)
 
-	common.SetupUseCustomTag(&commonCmdData, cmd)
 	common.SetupVirtualMerge(&commonCmdData, cmd)
 	common.SetupVirtualMergeFromCommit(&commonCmdData, cmd)
 	common.SetupVirtualMergeIntoCommit(&commonCmdData, cmd)
@@ -213,7 +212,7 @@ func runPublish() error {
 		return err
 	}
 
-	buildOptions, err := common.GetBuildOptions(&commonCmdData, giterminismManager, werfConfig)
+	buildOptions, err := common.GetBuildOptions(&commonCmdData, werfConfig)
 	if err != nil {
 		return err
 	}
@@ -265,12 +264,7 @@ func runPublish() error {
 
 		if err := conveyorWithRetry.WithRetryBlock(ctx, func(c *build.Conveyor) error {
 			if *commonCmdData.SkipBuild {
-				shouldBeBuiltOptions, err := common.GetShouldBeBuiltOptions(&commonCmdData, giterminismManager, werfConfig)
-				if err != nil {
-					return err
-				}
-
-				if err := c.ShouldBeBuilt(ctx, shouldBeBuiltOptions); err != nil {
+				if err := c.ShouldBeBuilt(ctx); err != nil {
 					return err
 				}
 			} else {
@@ -289,7 +283,7 @@ func runPublish() error {
 		logboek.LogOptionalLn()
 	}
 
-	secretsManager := secrets_manager.NewSecretsManager(giterminismManager.ProjectDir(), secrets_manager.SecretsManagerOptions{DisableSecretsDecryption: *commonCmdData.IgnoreSecretKey})
+	secretsManager := secrets_manager.NewSecretsManager(secrets_manager.SecretsManagerOptions{DisableSecretsDecryption: *commonCmdData.IgnoreSecretKey})
 
 	wc := chart_extender.NewWerfChart(ctx, giterminismManager, secretsManager, chartDir, cmd_helm.Settings, chart_extender.WerfChartOptions{
 		SecretValueFiles: *commonCmdData.SecretValues,
@@ -303,20 +297,9 @@ func runPublish() error {
 	if err := wc.SetWerfConfig(werfConfig); err != nil {
 		return err
 	}
-
-	useCustomTagFunc, err := common.GetUseCustomTagFunc(&commonCmdData, giterminismManager, werfConfig)
-	if err != nil {
-		return err
-	}
-
-	if vals, err := chart_extender.GetServiceValues(ctx, werfConfig.Meta.Project, imagesRepository, imagesInfoGetters, chart_extender.ServiceValuesOptions{Env: *commonCmdData.Environment, CustomTagFunc: useCustomTagFunc}); err != nil {
+	if vals, err := helpers.GetServiceValues(ctx, werfConfig.Meta.Project, imagesRepository, imagesInfoGetters, helpers.ServiceValuesOptions{Env: *commonCmdData.Environment}); err != nil {
 		return fmt.Errorf("error creating service values: %s", err)
 	} else if err := wc.SetServiceValues(vals); err != nil {
-		return err
-	}
-
-	actionConfig := new(action.Configuration)
-	if err := helm.InitActionConfig(ctx, nil, "", cmd_helm.Settings, actionConfig, helm.InitActionConfigOptions{}); err != nil {
 		return err
 	}
 
@@ -334,24 +317,11 @@ func runPublish() error {
 		FileValues:   *commonCmdData.SetFile,
 	}
 
-	postRenderer, err := wc.GetPostRenderer()
-	if err != nil {
-		return err
-	}
-
-	helmTemplateCmd, _ := cmd_helm.NewTemplateCmd(actionConfig, ioutil.Discard, cmd_helm.TemplateCmdOptions{
-		PostRenderer: postRenderer,
-		ValueOpts:    valueOpts,
-	})
-	if err := helmTemplateCmd.RunE(helmTemplateCmd, []string{"RELEASE", filepath.Join(giterminismManager.ProjectDir(), chartDir)}); err != nil {
-		return err
-	}
-
 	bundleTmpDir := filepath.Join(werf.GetServiceDir(), "tmp", "bundles", uuid.NewV4().String())
 	defer os.RemoveAll(bundleTmpDir)
 
 	p := getter.All(cmd_helm.Settings)
-	if vals, err := valueOpts.MergeValues(p, loader.GlobalLoadOptions.ChartExtender); err != nil {
+	if vals, err := valueOpts.MergeValues(p, wc); err != nil {
 		return err
 	} else if bundle, err := wc.CreateNewBundle(ctx, bundleTmpDir, vals); err != nil {
 		return fmt.Errorf("unable to create bundle: %s", err)
@@ -361,6 +331,11 @@ func runPublish() error {
 		bundleRef := fmt.Sprintf("%s:%s", repoAddress, cmdData.Tag)
 
 		if err := logboek.Context(ctx).LogProcess("Saving bundle to the local chart helm cache").DoError(func() error {
+			actionConfig := new(action.Configuration)
+			if err := helm.InitActionConfig(ctx, nil, "", cmd_helm.Settings, actionConfig, helm.InitActionConfigOptions{}); err != nil {
+				return err
+			}
+
 			helmChartSaveCmd := cmd_helm.NewChartSaveCmd(actionConfig, logboek.Context(ctx).OutStream())
 			if err := helmChartSaveCmd.RunE(helmChartSaveCmd, []string{bundle.Dir, bundleRef}); err != nil {
 				return fmt.Errorf("error saving bundle to the local chart helm cache: %s", err)
@@ -371,6 +346,11 @@ func runPublish() error {
 		}
 
 		if err := logboek.Context(ctx).LogProcess("Pushing bundle %q", bundleRef).DoError(func() error {
+			actionConfig := new(action.Configuration)
+			if err := helm.InitActionConfig(ctx, nil, "", cmd_helm.Settings, actionConfig, helm.InitActionConfigOptions{}); err != nil {
+				return err
+			}
+
 			helmChartPushCmd := cmd_helm.NewChartPushCmd(actionConfig, logboek.Context(ctx).OutStream())
 			if err := helmChartPushCmd.RunE(helmChartPushCmd, []string{bundleRef}); err != nil {
 				return fmt.Errorf("error pushing bundle %q: %s", bundleRef, err)

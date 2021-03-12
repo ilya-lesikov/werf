@@ -3,7 +3,6 @@ title: Overview
 without_auto_heading: true
 permalink: documentation/index.html
 description: Extensive and clear werf documentation
-sidebar: documentation
 ---
 
 {%- asset overview.css %}
@@ -75,17 +74,17 @@ sidebar: documentation
     <div class="overview__step">
         <div class="overview__step-title">Get the deep knowledge, which you will need eventually during werf usage</div>
         <div class="overview__step-actions">
-            <a class="overview__step-action" href="{{ "documentation/advanced/configuration/supported_go_templates.html" | true_relative_url }}">Advanced</a>
+            <a class="overview__step-action" href="{{ "documentation/advanced/giterminism.html" | true_relative_url }}">Advanced</a>
         </div>
         <div class="overview__step-info">
 <div markdown="1">
- - [Configuration]({{ "documentation/advanced/configuration/supported_go_templates.html" | true_relative_url }}) informs about templating principles of werf configuration files as well as generating deployment-related names (such as a Kubernetes namespace or a release name).
- - [Helm]({{ "documentation/advanced/helm/basics.html" | true_relative_url }})** describes the deploy essentials: how to configure werf for deploying to Kubernetes, what helm chart and release is. Here you may find the basics of templating Kubernetes resources, algorithms for using built images defined in your `werf.yaml` file during the deploy process and working with secrets, plus other useful stuff. Read this section if you want to learn more about organizing the deploy process with werf.
+ - [Giterminism]({{ "documentation/advanced/giterminism.html" | true_relative_url }}) describes how determinism is implemented with git, what limitations it imposes, and why.
+ - [Helm]({{ "documentation/advanced/helm/overview.html" | true_relative_url }})** describes the deploy essentials: how to configure werf for deploying to Kubernetes, what helm chart and release is. Here you may find the basics of templating Kubernetes resources, algorithms for using built images defined in your `werf.yaml` file during the deploy process and working with secrets, plus other useful stuff. Read this chapter if you want to learn more about organizing the deploy process with werf.
  - [Cleanup]({{ "documentation/advanced/cleanup.html" | true_relative_url }}) explains werf cleanup concepts and main commands to perform cleaning tasks.
  - [CI/CD]({{ "documentation/advanced/ci_cd/ci_cd_workflow_basics.html" | true_relative_url }}) describes main aspects of organizing CI/CD workflows with werf. Here you will learn how to use werf with GitLab CI/CD, GitHub Actions, or any other CI/CD system.
  - [Building images with stapel]({{ "documentation/reference/werf_yaml.html#image-section" | true_relative_url }}) introduces werf's custom builder. It currently implements the distributed building algorithm to enable lightning-fast build pipelines with distributed caching and incremental rebuilds based on the Git history of your application.
- - [Development and debug]({{ "documentation/advanced/development_and_debug/stage_introspection.html" | true_relative_url }}) describes debugging build and deploy processes of your application when something goes wrong and prvodes instructions for setting up a local development environment.
- - [Supported registry implementations]({{ "documentation/advanced/supported_registry_implementations.html" | true_relative_url }}) contains general info about supported implementations and authorization when using different implementations.
+ - [Development and debug]({{ "documentation/advanced/development_and_debug/stage_introspection.html" | true_relative_url }}) describes debugging build and deploy processes of your application when something goes wrong and provides instructions for setting up a local development environment.
+ - [Supported container registries]({{ "documentation/advanced/supported_container_registries.html" | true_relative_url }}) contains information about the peculiarities of using various container registries.
 </div>
         </div>
     </div>

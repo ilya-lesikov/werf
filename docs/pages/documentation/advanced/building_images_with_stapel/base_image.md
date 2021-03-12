@@ -1,6 +1,5 @@
 ---
 title: Base image
-sidebar: documentation
 permalink: documentation/advanced/building_images_with_stapel/base_image.html
 author: Alexey Igrychev <alexey.igrychev@flant.com>
 directive_summary: base_image
@@ -36,14 +35,7 @@ _fromLatest_ directive allows connecting the assembly process with the _base ima
 fromLatest: true
 ```
 
-> Pay attention, werf uses actual _base image_ digest in stage digest if _fromLatest_ is specified. Thus, the usage of this directive might break the reproducibility of previous builds. If the base image is changed in the registry, all previously built stages become not usable.
->
-> * Previous pipeline jobs (e.g. deploy) cannot be retried without the image rebuild after changing base image in the registry.
-> * If base image is modified unexpectedly it might lead to the inexplicably failed pipeline. For instance, the modification occurs after successful build and the following jobs will be failed due to changing of stages digests alongside base image digest.
->
-> If you want to use this directive, you need to disable giterminism mode with `--loose-giterminism` option.
->
-> **We do not recommend using the actual base image such way**. Use a particular unchangeable tag or periodically change [fromCacheVersion](#fromcacheversion) value to provide controllable and predictable lifecycle of software       
+> By default, the use of the `fromLatest` directive is not allowed by giterminism (read more about it [here]({{ "documentation/advanced/giterminism.html" | true_relative_url }}))
 
 ## fromImage and fromArtifact
 
@@ -55,7 +47,7 @@ fromArtifact: <artifact name>
 ```
 
 If a _base image_ is specific to a particular application,
-it is reasonable to store its description with _images_ and _artifacts_ which are used it as opposed to storing the _base image_ in a Docker registry.
+it is reasonable to store its description with _images_ and _artifacts_ which are used it as opposed to storing the _base image_ in a container registry.
 
 Also, this method can be useful if the stages of _stage conveyor_ are not enough for building the image. You can design your _stage conveyor_.
 

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/werf/werf/pkg/git_repo"
+	"github.com/werf/werf/pkg/path_matcher"
 )
 
 type Inspector struct {
@@ -18,18 +19,16 @@ func NewInspector(giterminismConfig giterminismConfig, fileReader fileReader, sh
 }
 
 type giterminismConfig interface {
-	IsCustomTagsAccepted() bool
 	IsConfigGoTemplateRenderingEnvNameAccepted(envName string) (bool, error)
 	IsConfigStapelFromLatestAccepted() bool
 	IsConfigStapelGitBranchAccepted() bool
 	IsConfigStapelMountBuildDirAccepted() bool
-	IsConfigStapelMountFromPathAccepted(fromPath string) (bool, error)
-	IsConfigDockerfileContextAddFileAccepted(relPath string) (bool, error)
+	IsConfigStapelMountFromPathAccepted(fromPath string) bool
+	IsConfigDockerfileContextAddFileAccepted(relPath string) bool
 }
 
 type fileReader interface {
-	HandleValidateSubmodulesErr(err error) error
-	ExtraWindowsCheckFilesModifiedLocally(ctx context.Context, relPath ...string) error
+	ValidateStatusResult(ctx context.Context, pathMatcher path_matcher.PathMatcher) error
 }
 
 type sharedOptions interface {

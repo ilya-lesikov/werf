@@ -74,7 +74,7 @@ If one or more IMAGE_NAME parameters specified, werf will build only these image
 	common.SetupConfigPath(&commonCmdData, cmd)
 	common.SetupEnvironment(&commonCmdData, cmd)
 
-	common.SetupGiterminismInspectorOptions(&commonCmdData, cmd)
+	common.SetupGiterminismOptions(&commonCmdData, cmd)
 
 	common.SetupTmpDir(&commonCmdData, cmd)
 	common.SetupHomeDir(&commonCmdData, cmd)
@@ -102,7 +102,6 @@ If one or more IMAGE_NAME parameters specified, werf will build only these image
 	common.SetupReportPath(&commonCmdData, cmd)
 	common.SetupReportFormat(&commonCmdData, cmd)
 
-	common.SetupAddCustomTag(&commonCmdData, cmd)
 	common.SetupVirtualMerge(&commonCmdData, cmd)
 	common.SetupVirtualMergeFromCommit(&commonCmdData, cmd)
 	common.SetupVirtualMergeIntoCommit(&commonCmdData, cmd)
@@ -220,7 +219,7 @@ func run(ctx context.Context, giterminismManager giterminism_manager.Interface, 
 
 	storageManager := manager.NewStorageManager(projectName, stagesStorage, secondaryStagesStorageList, storageLockManager, stagesStorageCache)
 
-	buildOptions, err := common.GetBuildOptions(&commonCmdData, giterminismManager, werfConfig)
+	buildOptions, err := common.GetBuildOptions(&commonCmdData, werfConfig)
 	if err != nil {
 		return err
 	}

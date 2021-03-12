@@ -4,9 +4,9 @@ go 1.14
 
 require (
 	bou.ke/monkey v1.0.1
-	github.com/Masterminds/goutils v1.1.0
+	github.com/Masterminds/goutils v1.1.1
 	github.com/Masterminds/semver v1.5.0
-	github.com/Masterminds/sprig/v3 v3.2.0
+	github.com/Masterminds/sprig/v3 v3.2.2
 	github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412 // indirect
 	github.com/alessio/shellescape v0.0.0-20190409004728-b115ca0f9053
 	github.com/aws/aws-sdk-go v1.31.6
@@ -32,7 +32,7 @@ require (
 	github.com/gogo/googleapis v1.4.0 // indirect
 	github.com/google/go-containerregistry v0.2.0
 	github.com/google/uuid v1.1.2
-	github.com/gookit/color v1.3.5
+	github.com/gookit/color v1.3.7
 	github.com/gosuri/uitable v0.0.4
 	github.com/hailocab/go-hostpool v0.0.0-20160125115350-e80d13ce29ed // indirect
 	github.com/hashicorp/go-multierror v1.0.0
@@ -43,6 +43,7 @@ require (
 	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0 // indirect
 	github.com/mailru/easyjson v0.7.2 // indirect
 	github.com/miekg/pkcs11 v1.0.3 // indirect
+	github.com/mitchellh/copystructure v1.0.0
 	github.com/moby/buildkit v0.7.1-0.20200615045306-df35e9818d1f
 	github.com/moby/term v0.0.0-20200611042045-63b9a826fb74 // indirect
 	github.com/mvdan/xurls v1.1.0 // indirect
@@ -63,11 +64,12 @@ require (
 	github.com/theupdateframework/notary v0.6.1 // indirect
 	github.com/tonistiigi/fsutil v0.0.0-20200724193237-c3ed55f3b481 // indirect
 	github.com/tonistiigi/go-rosetta v0.0.0-20200727161949-f79598599c5d // indirect
-	github.com/werf/kubedog v0.4.1-0.20210204234118-a6e65f252855
+	github.com/werf/kubedog v0.4.1-0.20210305081605-676b007fb936
 	github.com/werf/lockgate v0.0.0-20200729113342-ec2c142f71ea
-	github.com/werf/logboek v0.5.2
+	github.com/werf/logboek v0.5.3
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
-	golang.org/x/crypto v0.0.0-20201002170205-7f63de1d35b0
+	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
+	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad
 	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b
 	gopkg.in/dancannon/gorethink.v3 v3.0.5 // indirect
 	gopkg.in/fatih/pool.v2 v2.0.0 // indirect
@@ -76,36 +78,19 @@ require (
 	gopkg.in/oleiade/reflections.v1 v1.0.0
 	gopkg.in/yaml.v2 v2.3.0
 	helm.sh/helm/v3 v3.5.1
-	k8s.io/api v0.20.1
+	k8s.io/api v0.20.2
 	k8s.io/apimachinery v0.20.2
-	k8s.io/cli-runtime v0.20.1
-	k8s.io/client-go v0.20.1
+	k8s.io/cli-runtime v0.20.2
+	k8s.io/client-go v0.20.2
 	k8s.io/helm v2.17.0+incompatible
 	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.4.0
 	k8s.io/kubectl v0.20.1
-	k8s.io/kubernetes v1.13.0
 	mvdan.cc/xurls v1.1.0
 	rsc.io/letsencrypt v0.0.3 // indirect
 	sigs.k8s.io/yaml v1.2.0
 	vbom.ml/util v0.0.0-20180919145318-efcd4e0f9787 // indirect
 )
-
-replace k8s.io/api => k8s.io/api v0.19.2
-
-replace k8s.io/apimachinery => k8s.io/apimachinery v0.19.2
-
-replace k8s.io/cli-runtime => k8s.io/cli-runtime v0.19.2
-
-replace k8s.io/client-go => k8s.io/client-go v0.19.2
-
-replace k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.19.2
-
-replace k8s.io/code-generator => k8s.io/code-generator v0.16.8-beta.0
-
-replace k8s.io/component-base => k8s.io/component-base v0.19.2
-
-replace k8s.io/kubectl => k8s.io/kubectl v0.19.2
 
 replace github.com/docker/docker => github.com/docker/docker v17.12.0-ce-rc1.0.20200728121027-0f41a77c6993+incompatible
 
@@ -115,8 +100,8 @@ replace github.com/jaguilar/vt100 => github.com/tonistiigi/vt100 v0.0.0-20190402
 
 replace github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.3.2+incompatible
 
-replace helm.sh/helm/v3 => github.com/werf/helm/v3 v3.0.0-20210204134058-cb1f9e60e8b3
-
 replace k8s.io/helm => github.com/werf/helm v0.0.0-20210202111118-81e74d46da0f
 
 replace github.com/deislabs/oras => github.com/werf/oras v0.8.2-0.20210128161614-26d583f169ea
+
+replace helm.sh/helm/v3 => github.com/werf/helm/v3 v3.0.0-20210309164546-5025d62f56c2

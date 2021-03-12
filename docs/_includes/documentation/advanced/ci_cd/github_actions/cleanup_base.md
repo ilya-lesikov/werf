@@ -1,6 +1,6 @@
 {% raw %}
 ```yaml
-name: Cleanup Docker registry
+name: Cleanup container registry
 on:
   schedule:
     - cron:  '0 6 * * *'
@@ -20,7 +20,7 @@ jobs:
         run: git fetch --prune --unshallow
 
       - name: Cleanup
-        uses: werf/actions/cleanup@master
+        uses: werf/actions/cleanup@v1.2
         with:
           kube-config-base64-data: ${{ secrets.KUBE_CONFIG_BASE64_DATA }}
 ```

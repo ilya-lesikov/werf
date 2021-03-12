@@ -107,6 +107,7 @@ $(document).ready(function () {
     } else docSubURL = '/documentation/';
 
     var submenu = $('<ul class="header__submenu">');
+    var prev_channel_version = '';
     $.each(releasesInfo.menuChannels, function (j, group) {
       $.each(releasesInfo.orderedChannels, function (i, channel) {
 
@@ -119,10 +120,13 @@ $(document).ready(function () {
         } else channel_version = 'review';
 
         if (channel_version) {
-          var link = $('<a href="/v' + group.group + '-' + channel + docSubURL +'">');
+          var link = $('<a class="header__submenu-item-link" href="/v' + group.group + '-' + channel + docSubURL +'">');
+          var dot_class = channel_version == prev_channel_version ? ' header__submenu-item-dot_special' : '';
+          prev_channel_version = channel_version;
           if (channel !== 'review') {
             link.append('<span class="header__submenu-item-channel"> ' + group.group + '-' + channel + '</span>');
-            link.append('<span class="header__submenu-item-release"> — ' + channel_version + '</span>');
+            link.append('<span class="header__submenu-item-dot' + dot_class + '"></span>');
+            link.append('<span class="header__submenu-item-release">' + channel_version + '</span>');
           }
 
           var item = $('<li class="header__submenu-item">');
@@ -148,7 +152,8 @@ $(document).ready(function () {
 
   toggler.append(currentChannel || 'Versions');
   if (currentChannel && !((currentChannel === 'local') || (currentChannel === 'review'))) {
-    toggler.append('<span class="header__menu-item-extra"> – ' + currentRelease + '</span>');
+    toggler.append('<span class="header__menu-item-dot">');
+    toggler.append('<span class="header__menu-item-extra">' + currentRelease + '</span>');
   }
   menu.prepend(toggler);
 
@@ -405,5 +410,55 @@ $(document).ready(function() {
       .to('#scheme_git', {opacity: '1'}, 0)
       .to('#scheme_arrows_gw', {opacity: '1'}, 0)
     ).addTo(magic);
+  }
+});
+
+
+// Intro scheme
+
+$(document).ready(function() {
+  if($('#intro-animation').length) {
+    var ia = {};
+    ia.dot =          '#intro-animation-dot';
+    ia.dot2 =         '#intro-animation-dot2';
+    ia.k8s =          '#intro-animation-k8s';
+    ia.git =          '#intro-animation-git';
+    ia.docker =       '#intro-animation-docker';
+    ia.helm =         '#intro-animation-helm';
+    ia.werf =         '#intro-animation-werf';
+    ia.werf_k8s =     '#intro-animation-werf-k8s';
+    ia.werf_git =     '#intro-animation-werf-git';
+    ia.werf_docker =  '#intro-animation-werf-docker';
+    ia.werf_helm =    '#intro-animation-werf-helm';
+
+    function moveDot(data) {
+      data.timeline
+      .to(data.dot,  {duration: 2, ease: 'power1.inOut',
+                            motionPath: {
+                              path: data.path,
+                              align: data.path,
+                              alignOrigin: [0.5, 0.5],
+                              autoRotate: false,
+                              start: 0,
+	                            end: data.reverse ? -1 : 1,
+                            }
+                          }, data.delay)
+      .to(data.dot,  {opacity: 1, duration: 0.25}, '-=2')
+      .to(data.dot,  {opacity: 0, duration: 0.25}, '-=0.25');
+    }
+
+    var tl = gsap.timeline({repeat: -1, repeatDelay: 1, delay: 1});
+    // Dot git werf
+    moveDot({timeline: tl,  dot: ia.dot,    path: ia.werf_git,      reverse: false,     delay: '=0'   });
+    // Dot werf docker
+    moveDot({timeline: tl,  dot: ia.dot,    path: ia.werf_docker,   reverse: false,     delay: '=0'   });
+    // Dot werf helm
+    moveDot({timeline: tl,  dot: ia.dot2,   path: ia.werf_helm,     reverse: true,      delay: '-=2'  });
+    // Dot docker werf
+    moveDot({timeline: tl,  dot: ia.dot,    path: ia.werf_docker,   reverse: true,      delay: '=0'   });
+    // Dot helm werf
+    moveDot({timeline: tl,  dot: ia.dot2,   path: ia.werf_helm,     reverse: false,     delay: '-=2'  });
+    // Dot werf k8s
+    moveDot({timeline: tl,  dot: ia.dot,    path: ia.werf_k8s,      reverse: true,      delay: '=0'   });
   }
 });

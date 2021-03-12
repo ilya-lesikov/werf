@@ -22,6 +22,7 @@ import (
 	"github.com/werf/werf/pkg/container_runtime"
 	"github.com/werf/werf/pkg/deploy/helm"
 	"github.com/werf/werf/pkg/deploy/helm/chart_extender"
+	"github.com/werf/werf/pkg/deploy/helm/chart_extender/helpers"
 	"github.com/werf/werf/pkg/deploy/secrets_manager"
 	"github.com/werf/werf/pkg/docker"
 	"github.com/werf/werf/pkg/git_repo"
@@ -36,9 +37,9 @@ import (
 )
 
 var cmdData struct {
-	Timeout      int
-	AutoRollback bool
 	RenderOutput string
+	Validate     bool
+	IncludeCRDs  bool
 }
 
 var commonCmdData common.CmdData
@@ -75,7 +76,7 @@ func NewCmd() *cobra.Command {
 	common.SetupConfigPath(&commonCmdData, cmd)
 	common.SetupEnvironment(&commonCmdData, cmd)
 
-	common.SetupGiterminismInspectorOptions(&commonCmdData, cmd)
+	common.SetupGiterminismOptions(&commonCmdData, cmd)
 
 	common.SetupTmpDir(&commonCmdData, cmd)
 	common.SetupHomeDir(&commonCmdData, cmd)
@@ -113,7 +114,6 @@ func NewCmd() *cobra.Command {
 	common.SetupReportPath(&commonCmdData, cmd)
 	common.SetupReportFormat(&commonCmdData, cmd)
 
-	common.SetupUseCustomTag(&commonCmdData, cmd)
 	common.SetupVirtualMerge(&commonCmdData, cmd)
 	common.SetupVirtualMergeFromCommit(&commonCmdData, cmd)
 	common.SetupVirtualMergeIntoCommit(&commonCmdData, cmd)
@@ -122,9 +122,8 @@ func NewCmd() *cobra.Command {
 
 	common.SetupSkipBuild(&commonCmdData, cmd)
 
-	cmd.Flags().IntVarP(&cmdData.Timeout, "timeout", "t", 0, "Resources tracking timeout in seconds")
-	cmd.Flags().BoolVarP(&cmdData.AutoRollback, "auto-rollback", "R", common.GetBoolEnvironmentDefaultFalse("WERF_AUTO_ROLLBACK"), "Enable auto rollback of the failed release to the previous deployed release version when current deploy process have failed ($WERF_AUTO_ROLLBACK by default)")
-	cmd.Flags().BoolVarP(&cmdData.AutoRollback, "atomic", "", common.GetBoolEnvironmentDefaultFalse("WERF_ATOMIC"), "Enable auto rollback of the failed release to the previous deployed release version when current deploy process have failed ($WERF_ATOMIC by default)")
+	cmd.Flags().BoolVarP(&cmdData.Validate, "validate", "", common.GetBoolEnvironmentDefaultFalse("WERF_VALIDATE"), "Validate your manifests against the Kubernetes cluster you are currently pointing at (default $WERF_VALIDATE)")
+	cmd.Flags().BoolVarP(&cmdData.IncludeCRDs, "include-crds", "", common.GetBoolEnvironmentDefaultTrue("WERF_INCLUDE_CRDS"), "Include CRDs in the templated output (default $WERF_INCLUDE_CRDS)")
 
 	cmd.Flags().StringVarP(&cmdData.RenderOutput, "output", "", os.Getenv("WERF_RENDER_OUTPUT"), "Write render output to the specified file instead of stdout ($WERF_RENDER_OUTPUT by default)")
 
@@ -219,7 +218,7 @@ func runRender() error {
 		return err
 	}
 
-	buildOptions, err := common.GetBuildOptions(&commonCmdData, giterminismManager, werfConfig)
+	buildOptions, err := common.GetBuildOptions(&commonCmdData, werfConfig)
 	if err != nil {
 		return err
 	}
@@ -270,12 +269,7 @@ func runRender() error {
 
 			if err := conveyorWithRetry.WithRetryBlock(ctx, func(c *build.Conveyor) error {
 				if *commonCmdData.SkipBuild {
-					shouldBeBuiltOptions, err := common.GetShouldBeBuiltOptions(&commonCmdData, giterminismManager, werfConfig)
-					if err != nil {
-						return err
-					}
-
-					if err := c.ShouldBeBuilt(ctx, shouldBeBuiltOptions); err != nil {
+					if err := c.ShouldBeBuilt(ctx); err != nil {
 						return err
 					}
 				} else {
@@ -298,7 +292,7 @@ func runRender() error {
 		}
 	}
 
-	secretsManager := secrets_manager.NewSecretsManager(giterminismManager.ProjectDir(), secrets_manager.SecretsManagerOptions{DisableSecretsDecryption: *commonCmdData.IgnoreSecretKey})
+	secretsManager := secrets_manager.NewSecretsManager(secrets_manager.SecretsManagerOptions{DisableSecretsDecryption: *commonCmdData.IgnoreSecretKey})
 
 	wc := chart_extender.NewWerfChart(ctx, giterminismManager, secretsManager, chartDir, cmd_helm.Settings, chart_extender.WerfChartOptions{
 		SecretValueFiles: common.GetSecretValues(&commonCmdData),
@@ -312,20 +306,14 @@ func runRender() error {
 	if err := wc.SetWerfConfig(werfConfig); err != nil {
 		return err
 	}
-
-	useCustomTagFunc, err := common.GetUseCustomTagFunc(&commonCmdData, giterminismManager, werfConfig)
-	if err != nil {
-		return err
-	}
-
-	if vals, err := chart_extender.GetServiceValues(ctx, werfConfig.Meta.Project, imagesRepository, imagesInfoGetters, chart_extender.ServiceValuesOptions{Namespace: namespace, Env: *commonCmdData.Environment, IsStub: isStub, CustomTagFunc: useCustomTagFunc}); err != nil {
+	if vals, err := helpers.GetServiceValues(ctx, werfConfig.Meta.Project, imagesRepository, imagesInfoGetters, helpers.ServiceValuesOptions{Namespace: namespace, Env: *commonCmdData.Environment, IsStub: isStub}); err != nil {
 		return fmt.Errorf("error creating service values: %s", err)
 	} else if err := wc.SetServiceValues(vals); err != nil {
 		return err
 	}
 
 	if *commonCmdData.SetDockerConfigJsonValue {
-		if err := chart_extender.WriteDockerConfigJsonValue(ctx, wc.GetExtraValues(), *commonCmdData.DockerConfig); err != nil {
+		if err := helpers.WriteDockerConfigJsonValue(ctx, wc.GetExtraValues(), *commonCmdData.DockerConfig); err != nil {
 			return fmt.Errorf("error writing docker config value into werf chart extra values: %s", err)
 		}
 	}
@@ -367,6 +355,12 @@ func runRender() error {
 			Values:       common.GetSet(&commonCmdData),
 			FileValues:   common.GetSetFile(&commonCmdData),
 		},
+		Validate:    &cmdData.Validate,
+		IncludeCrds: &cmdData.IncludeCRDs,
 	})
-	return helmTemplateCmd.RunE(helmTemplateCmd, []string{releaseName, filepath.Join(giterminismManager.ProjectDir(), chartDir)})
+	if err := helmTemplateCmd.RunE(helmTemplateCmd, []string{releaseName, filepath.Join(giterminismManager.ProjectDir(), chartDir)}); err != nil {
+		return fmt.Errorf("helm templates rendering failed: %s", err)
+	}
+
+	return nil
 }

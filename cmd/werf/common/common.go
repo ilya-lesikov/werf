@@ -69,9 +69,6 @@ type CmdData struct {
 	SkipBuild *bool
 	StubTags  *bool
 
-	AddCustomTag *[]string
-	UseCustomTag *string
-
 	Synchronization    *string
 	Parallel           *bool
 	ParallelTasksLimit *int64
@@ -85,6 +82,7 @@ type CmdData struct {
 
 	LooseGiterminism *bool
 	Dev              *bool
+	DevMode          *string
 
 	IntrospectBeforeError *bool
 	IntrospectAfterError  *bool
@@ -108,6 +106,8 @@ type CmdData struct {
 	VirtualMergeIntoCommit *string
 
 	ScanContextNamespaceOnly *bool
+
+	Tag *string
 }
 
 const (
@@ -157,19 +157,36 @@ func SetupTmpDir(cmdData *CmdData, cmd *cobra.Command) {
 	cmd.Flags().StringVarP(cmdData.TmpDir, "tmp-dir", "", "", "Use specified dir to store tmp files and dirs (default $WERF_TMP_DIR or system tmp dir)")
 }
 
-func SetupGiterminismInspectorOptions(cmdData *CmdData, cmd *cobra.Command) {
+func SetupGiterminismOptions(cmdData *CmdData, cmd *cobra.Command) {
 	setupLooseGiterminism(cmdData, cmd)
 	setupDev(cmdData, cmd)
+	setupDevMode(cmdData, cmd)
 }
 
 func setupLooseGiterminism(cmdData *CmdData, cmd *cobra.Command) {
 	cmdData.LooseGiterminism = new(bool)
-	cmd.Flags().BoolVarP(cmdData.LooseGiterminism, "loose-giterminism", "", GetBoolEnvironmentDefaultFalse("WERF_LOOSE_GITERMINISM"), "Loose werf giterminism mode restrictions (NOTE: not all restrictions can be removed, more info https://werf.io/v1.2-alpha/documentation/advanced/configuration/giterminism.html, default $WERF_LOOSE_GITERMINISM)")
+	cmd.Flags().BoolVarP(cmdData.LooseGiterminism, "loose-giterminism", "", GetBoolEnvironmentDefaultFalse("WERF_LOOSE_GITERMINISM"), "Loose werf giterminism mode restrictions (NOTE: not all restrictions can be removed, more info https://werf.io/v1.2-alpha/documentation/advanced/giterminism.html, default $WERF_LOOSE_GITERMINISM)")
 }
 
 func setupDev(cmdData *CmdData, cmd *cobra.Command) {
 	cmdData.Dev = new(bool)
-	cmd.Flags().BoolVarP(cmdData.Dev, "dev", "", GetBoolEnvironmentDefaultFalse("WERF_DEV"), "Enable developer mode (default $WERF_DEV)")
+	cmd.Flags().BoolVarP(cmdData.Dev, "dev", "", GetBoolEnvironmentDefaultFalse("WERF_DEV"), `Enable development mode (default $WERF_DEV).
+The mode allows working with project files without doing redundant commits during debugging and development`)
+}
+
+func setupDevMode(cmdData *CmdData, cmd *cobra.Command) {
+	cmdData.DevMode = new(string)
+
+	defaultValue := "simple"
+	envValue := os.Getenv("WERF_DEV_MODE")
+	if envValue != "" {
+		defaultValue = envValue
+	}
+
+	cmd.Flags().StringVarP(cmdData.DevMode, "dev-mode", "", defaultValue, `Set development mode (default $WERF_DEV_MODE or simple).
+Two development modes are supported:
+- simple: for working with the worktree state of the git repository
+- strict: for working with the index state of the git repository`)
 }
 
 func SetupHomeDir(cmdData *CmdData, cmd *cobra.Command) {
@@ -325,7 +342,8 @@ func getFirstExistingEnvVarAsString(envNames ...string) string {
 func SetupCommonRepoData(cmdData *CmdData, cmd *cobra.Command) {
 	cmdData.CommonRepoData = &RepoData{IsCommon: true}
 
-	SetupImplementationForRepoData(cmdData.CommonRepoData, cmd, "repo-implementation", []string{"WERF_REPO_IMPLEMENTATION"})
+	SetupImplementationForRepoData(cmdData.CommonRepoData, cmd, "repo-implementation", []string{"WERF_REPO_IMPLEMENTATION"}) // legacy
+	SetupContainerRegistryForRepoData(cmdData.CommonRepoData, cmd, "repo-container-registry", []string{"WERF_REPO_CONTAINER_REGISTRY"})
 	SetupDockerHubUsernameForRepoData(cmdData.CommonRepoData, cmd, "repo-docker-hub-username", []string{"WERF_REPO_DOCKER_HUB_USERNAME"})
 	SetupDockerHubPasswordForRepoData(cmdData.CommonRepoData, cmd, "repo-docker-hub-password", []string{"WERF_REPO_DOCKER_HUB_PASSWORD"})
 	SetupDockerHubTokenForRepoData(cmdData.CommonRepoData, cmd, "repo-docker-hub-token", []string{"WERF_REPO_DOCKER_HUB_TOKEN"})
@@ -339,22 +357,6 @@ func SetupSecondaryStagesStorageOptions(cmdData *CmdData, cmd *cobra.Command) {
 	cmdData.SecondaryStagesStorage = new([]string)
 	cmd.Flags().StringArrayVarP(cmdData.SecondaryStagesStorage, "secondary-repo", "", []string{}, `Specify one or multiple secondary read-only repos with images that will be used as a cache.
 Also, can be specified with $WERF_SECONDARY_REPO_* (e.g. $WERF_SECONDARY_REPO_1=..., $WERF_SECONDARY_REPO_2=...)`)
-}
-
-func SetupAddCustomTag(cmdData *CmdData, cmd *cobra.Command) {
-	cmdData.AddCustomTag = new([]string)
-	cmd.Flags().StringArrayVarP(cmdData.AddCustomTag, "add-custom-tag", "", []string{}, `Set tag aliases for an image content-based tag.
-For cleaning all aliases and a related content-based tag are treated as one.
-It is necessary to use the image name shortcut %image% or %image_slug% in the tag format if there is more than one image in the werf config. 
-Also, can be defined with $WERF_ADD_CUSTOM_TAG_* (e.g. $WERF_ADD_CUSTOM_TAG_1="%image%-tag1", $WERF_ADD_CUSTOM_TAG_2="%image%-tag2").`)
-}
-
-func SetupUseCustomTag(cmdData *CmdData, cmd *cobra.Command) {
-	cmdData.UseCustomTag = new(string)
-	cmd.Flags().StringVarP(cmdData.UseCustomTag, "use-custom-tag", "", os.Getenv("WERF_USE_CUSTOM_TAG"), `Use a tag alias in helm templates instead of an image content-based tag (NOT RECOMMENDED).
-For cleaning all aliases and a related content-based tag are treated as one.
-It is necessary to use the image name shortcut %image% or %image_slug% in the tag format if there is more than one image in the werf config. 
-Also, can be defined with $WERF_USE_CUSTOM_TAG (e.g. $WERF_USE_CUSTOM_TAG="%image%-tag").`)
 }
 
 func SetupStagesStorageOptions(cmdData *CmdData, cmd *cobra.Command) {
@@ -737,7 +739,9 @@ func SetupStubTags(cmdData *CmdData, cmd *cobra.Command) {
 
 func SetupFollow(cmdData *CmdData, cmd *cobra.Command) {
 	cmdData.Follow = new(bool)
-	cmd.Flags().BoolVarP(cmdData.Follow, "follow", "", GetBoolEnvironmentDefaultFalse("WERF_FOLLOW"), "Follow git HEAD and run command for each new commit (default $WERF_FOLLOW)")
+	cmd.Flags().BoolVarP(cmdData.Follow, "follow", "", GetBoolEnvironmentDefaultFalse("WERF_FOLLOW"), `Enable follow mode (default $WERF_FOLLOW).
+The mode allows restarting the command on a new commit.
+In development mode (--dev), it additionally tracks changes in the index state of the git repository, regardless of whether simple or strict development mode (--dev-mode) is used`)
 }
 
 func allStagesNames() []string {
@@ -815,6 +819,18 @@ func getUint64EnvVar(varName string) (*uint64, error) {
 	return nil, nil
 }
 
+func getDevMode(cmdData *CmdData) (string, error) {
+	value := *cmdData.DevMode
+	switch value {
+	case "simple", "strict":
+		return value, nil
+	case "":
+		return "", fmt.Errorf("--dev-mode param required")
+	default:
+		return "", fmt.Errorf("bad --dev-mode %q: simple and strict modes are supported", value)
+	}
+}
+
 func GetParallelTasksLimit(cmdData *CmdData) (int64, error) {
 	v, err := getInt64EnvVar("WERF_PARALLEL_TASKS_LIMIT")
 	if err != nil {
@@ -847,7 +863,7 @@ func GetOptionalStagesStorageAddress(cmdData *CmdData) string {
 }
 
 func GetStagesStorage(stagesStorageAddress string, containerRuntime container_runtime.ContainerRuntime, cmdData *CmdData) (storage.StagesStorage, error) {
-	if err := ValidateRepoImplementation(*cmdData.CommonRepoData.Implementation); err != nil {
+	if err := ValidateRepoContainerRegistry(cmdData.CommonRepoData.GetContainerRegistry()); err != nil {
 		return nil, err
 	}
 
@@ -856,7 +872,7 @@ func GetStagesStorage(stagesStorageAddress string, containerRuntime container_ru
 		containerRuntime,
 		storage.StagesStorageOptions{
 			RepoStagesStorageOptions: storage.RepoStagesStorageOptions{
-				Implementation: *cmdData.CommonRepoData.Implementation,
+				ContainerRegistry: cmdData.CommonRepoData.GetContainerRegistry(),
 				DockerRegistryOptions: docker_registry.DockerRegistryOptions{
 					InsecureRegistry:      *cmdData.InsecureRegistry,
 					SkipTlsVerifyRegistry: *cmdData.SkipTlsVerifyRegistry,
@@ -983,7 +999,18 @@ func GetGiterminismManager(cmdData *CmdData) (giterminism_manager.Interface, err
 		return nil, fmt.Errorf("werf requires project dir — the current working directory or directory specified with --dir option (or WERF_DIR env var) — to be located inside the git work tree: %q is located outside of the git work tree %q", gitWorkTree, workingDir)
 	}
 
-	localGitRepo, err := git_repo.OpenLocalRepo("own", gitWorkTree, git_repo.OpenLocalRepoOptions{Dev: *cmdData.Dev})
+	devMode, err := getDevMode(cmdData)
+	if err != nil {
+		return nil, err
+	}
+
+	var openLocalRepoOptions git_repo.OpenLocalRepoOptions
+	if *cmdData.Dev {
+		openLocalRepoOptions.WithServiceHeadCommit = true
+		openLocalRepoOptions.ServiceHeadCommitOptions.WithStagedChangesOnly = devMode == "strict"
+	}
+
+	localGitRepo, err := git_repo.OpenLocalRepo("own", gitWorkTree, openLocalRepoOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -996,6 +1023,7 @@ func GetGiterminismManager(cmdData *CmdData) (giterminism_manager.Interface, err
 	return giterminism_manager.NewManager(BackgroundContext(), workingDir, localGitRepo, headCommit, giterminism_manager.NewManagerOptions{
 		LooseGiterminism: *cmdData.LooseGiterminism,
 		Dev:              *cmdData.Dev,
+		DevMode:          devMode,
 	})
 }
 
@@ -1068,10 +1096,6 @@ func GetAddAnnotations(cmdData *CmdData) []string {
 
 func GetSecondaryStagesStorage(cmdData *CmdData) []string {
 	return append(predefinedValuesByEnvNamePrefix("WERF_SECONDARY_REPO_"), *cmdData.SecondaryStagesStorage...)
-}
-
-func getAddCustomTag(cmdData *CmdData) []string {
-	return append(predefinedValuesByEnvNamePrefix("WERF_ADD_CUSTOM_TAG_"), *cmdData.AddCustomTag...)
 }
 
 func GetSet(cmdData *CmdData) []string {
@@ -1264,17 +1288,17 @@ func DockerRegistryInit(cmdData *CmdData) error {
 	return docker_registry.Init(BackgroundContext(), *cmdData.InsecureRegistry, *cmdData.SkipTlsVerifyRegistry)
 }
 
-func ValidateRepoImplementation(implementation string) error {
+func ValidateRepoContainerRegistry(containerRegistry string) error {
 	supportedValues := docker_registry.ImplementationList()
 	supportedValues = append(supportedValues, "auto", "")
 
-	for _, supportedImplementation := range supportedValues {
-		if supportedImplementation == implementation {
+	for _, supportedContainerRegistry := range supportedValues {
+		if supportedContainerRegistry == containerRegistry {
 			return nil
 		}
 	}
 
-	return fmt.Errorf("specified docker registry implementation %q is not supported", implementation)
+	return fmt.Errorf("specified container registry %q is not supported", containerRegistry)
 }
 
 func ValidateMinimumNArgs(minArgs int, args []string, cmd *cobra.Command) error {

@@ -9,7 +9,7 @@ import (
 	"github.com/werf/logboek"
 )
 
-func setCommandRecordingLiveOutput(ctx context.Context, cmd *exec.Cmd) *bytes.Buffer {
+func SetCommandRecordingLiveOutput(ctx context.Context, cmd *exec.Cmd) *bytes.Buffer {
 	recorder := &bytes.Buffer{}
 
 	if liveGitOutput {
@@ -21,4 +21,8 @@ func setCommandRecordingLiveOutput(ctx context.Context, cmd *exec.Cmd) *bytes.Bu
 	}
 
 	return recorder
+}
+
+func getCommonGitOptions() []string {
+	return []string{"-c", "core.autocrlf=false"}
 }

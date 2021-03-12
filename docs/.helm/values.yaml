@@ -1,6 +1,7 @@
 host:
-  production: ng.werf.io
-  _default: werfng.test.flant.com
+  production: werf.io
+  dev: werf.dev.flant.com
+  _default: werf.test.flant.com
 
 resources:
   requests:

@@ -11,28 +11,24 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/mitchellh/copystructure"
 	"github.com/werf/werf/pkg/deploy/secrets_manager"
-
-	"github.com/werf/werf/pkg/secret"
 
 	"github.com/werf/logboek"
 	"sigs.k8s.io/yaml"
 
 	"helm.sh/helm/v3/pkg/chart"
+	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/chartutil"
 	"helm.sh/helm/v3/pkg/cli"
-	"helm.sh/helm/v3/pkg/postrender"
 
 	"github.com/werf/werf/pkg/config"
 	"github.com/werf/werf/pkg/deploy/helm"
 	"github.com/werf/werf/pkg/deploy/helm/command_helpers"
 	"github.com/werf/werf/pkg/giterminism_manager"
-	"github.com/werf/werf/pkg/util/secretvalues"
-)
 
-const (
-	DefaultSecretValuesFileName = "secret-values.yaml"
-	SecretDirName               = "secret"
+	"github.com/werf/werf/pkg/deploy/helm/chart_extender/helpers"
+	"github.com/werf/werf/pkg/deploy/helm/chart_extender/helpers/secrets"
 )
 
 type WerfChartOptions struct {
@@ -54,15 +50,20 @@ func NewWerfChart(ctx context.Context, giterminismManager giterminism_manager.In
 		SecretsManager:     secretsManager,
 
 		extraAnnotationsAndLabelsPostRenderer: helm.NewExtraAnnotationsAndLabelsPostRenderer(nil, nil),
-		decodedSecretFilesData:                make(map[string]string),
 
-		ExtraValuesData:          NewExtraValuesData(),
-		ChartExtenderContextData: NewChartExtenderContextData(ctx),
+		ChartExtenderExtraValuesData: helpers.NewChartExtenderExtraValuesData(),
+		ChartExtenderContextData:     helpers.NewChartExtenderContextData(ctx),
 	}
 
 	wc.extraAnnotationsAndLabelsPostRenderer.Add(opts.ExtraAnnotations, opts.ExtraLabels)
 
 	return wc
+}
+
+type WerfChartRuntimeData struct {
+	DecodedSecretValues    map[string]interface{}
+	DecodedSecretFilesData map[string]string
+	SecretValuesToMask     []string
 }
 
 type WerfChart struct {
@@ -79,65 +80,36 @@ type WerfChart struct {
 
 	extraAnnotationsAndLabelsPostRenderer *helm.ExtraAnnotationsAndLabelsPostRenderer
 	werfConfig                            *config.WerfConfig
-	decodedSecretValues                   map[string]interface{}
-	decodedSecretFilesData                map[string]string
-	secretValuesToMask                    []string
 	serviceValues                         map[string]interface{}
 
-	*ExtraValuesData
-	*ChartExtenderContextData
+	*secrets.SecretsRuntimeData
+	*helpers.ChartExtenderExtraValuesData
+	*helpers.ChartExtenderContextData
 }
 
 // ChartCreated method for the chart.Extender interface
 func (wc *WerfChart) ChartCreated(c *chart.Chart) error {
 	wc.HelmChart = c
+	wc.SecretsRuntimeData = secrets.NewSecretsRuntimeData()
 	return nil
 }
 
 // ChartLoaded method for the chart.Extender interface
 func (wc *WerfChart) ChartLoaded(files []*chart.ChartExtenderBufferedFile) error {
-	secretDirFiles := GetSecretDirFiles(files)
-	secretValuesFiles := GetSecretValuesFiles(wc.ChartDir, files, SecretValuesFilesOptions{CustomFiles: wc.SecretValueFiles})
-
-	var encoder *secret.YamlEncoder
-	if len(secretDirFiles)+len(secretValuesFiles) > 0 {
-		if enc, err := wc.SecretsManager.GetYamlEncoder(wc.chartExtenderContext); err != nil {
-			return err
-		} else {
-			encoder = enc
-		}
+	if err := wc.SecretsRuntimeData.DecodeAndLoadSecrets(wc.ChartExtenderContext, files, wc.SecretValueFiles, wc.ChartDir, wc.GiterminismManager.ProjectDir(), wc.SecretsManager); err != nil {
+		return fmt.Errorf("error decoding secrets: %s", err)
 	}
 
-	if len(secretDirFiles) > 0 {
-		if data, err := LoadChartSecretDirFilesData(wc.ChartDir, secretDirFiles, encoder); err != nil {
-			return fmt.Errorf("error loading secret files data: %s", err)
-		} else {
-			wc.decodedSecretFilesData = data
-			for _, fileData := range wc.decodedSecretFilesData {
-				wc.secretValuesToMask = append(wc.secretValuesToMask, fileData)
-			}
-		}
-	}
-
-	if len(secretValuesFiles) > 0 {
-		if values, err := LoadChartSecretValueFiles(wc.ChartDir, secretValuesFiles, encoder); err != nil {
-			return fmt.Errorf("error loading secret value files: %s", err)
-		} else {
-			wc.decodedSecretValues = values
-			wc.secretValuesToMask = append(wc.secretValuesToMask, secretvalues.ExtractSecretValuesFromMap(values)...)
-		}
-	}
-
-	var opts GetHelmChartMetadataOptions
+	var opts helpers.GetHelmChartMetadataOptions
 	if wc.werfConfig != nil {
 		opts.OverrideName = wc.werfConfig.Meta.Project
 	}
 	opts.DefaultVersion = "1.0.0"
-	wc.HelmChart.Metadata = AutosetChartMetadata(wc.HelmChart.Metadata, opts)
+	wc.HelmChart.Metadata = helpers.AutosetChartMetadata(wc.HelmChart.Metadata, opts)
 
 	wc.HelmChart.Templates = append(wc.HelmChart.Templates, &chart.File{
 		Name: "templates/_werf_helpers.tpl",
-		Data: []byte(ChartTemplateHelpers),
+		Data: []byte(helpers.ChartTemplateHelpers),
 	})
 
 	return nil
@@ -148,18 +120,51 @@ func (wc *WerfChart) ChartDependenciesLoaded() error {
 	return nil
 }
 
-// MakeValues method for the chart.Extender interface
-func (wc *WerfChart) MakeValues(inputVals map[string]interface{}) (map[string]interface{}, error) {
+func (wc *WerfChart) makeValues(inputVals map[string]interface{}, withSecrets bool) (map[string]interface{}, error) {
 	vals := make(map[string]interface{})
-	chartutil.CoalesceTables(vals, wc.extraValues)   // NOTE: extra values will not be saved into the marshalled release
+	chartutil.CoalesceTables(vals, wc.ExtraValues)   // NOTE: extra values will not be saved into the marshalled release
 	chartutil.CoalesceTables(vals, wc.serviceValues) // NOTE: service values will not be saved into the marshalled release
-	chartutil.CoalesceTables(vals, wc.decodedSecretValues)
+
+	if withSecrets {
+		chartutil.CoalesceTables(vals, wc.SecretsRuntimeData.DecodedSecretValues)
+	}
+
 	chartutil.CoalesceTables(vals, inputVals)
 
 	data, err := yaml.Marshal(vals)
-	logboek.Context(wc.chartExtenderContext).Debug().LogF("-- WerfChart.MakeValues result (err=%v):\n%s\n---\n", err, data)
+	logboek.Context(wc.ChartExtenderContext).Debug().LogF("-- WerfChart.makeValues result (err=%v):\n%s\n---\n", err, data)
 
 	return vals, nil
+}
+
+// MakeValues method for the chart.Extender interface
+func (wc *WerfChart) MakeValues(inputVals map[string]interface{}) (map[string]interface{}, error) {
+	return wc.makeValues(inputVals, true)
+}
+
+func (wc *WerfChart) MakeBundleValues(chrt *chart.Chart, inputVals map[string]interface{}) (map[string]interface{}, error) {
+	vals, err := wc.makeValues(inputVals, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to coalesce werf chart values: %s", err)
+	}
+
+	v, err := copystructure.Copy(vals)
+	if err != nil {
+		return vals, err
+	}
+
+	valsCopy := v.(map[string]interface{})
+	// if we have an empty map, make sure it is initialized
+	if valsCopy == nil {
+		valsCopy = make(map[string]interface{})
+	}
+
+	chartutil.CoalesceChartValues(chrt, valsCopy)
+
+	data, err := yaml.Marshal(vals)
+	logboek.Context(wc.ChartExtenderContext).Debug().LogF("-- WerfChart.MakeBundleValues result (err=%v):\n%s\n---\n", err, data)
+
+	return valsCopy, nil
 }
 
 // SetupTemplateFuncs method for the chart.Extender interface
@@ -169,11 +174,11 @@ func (wc *WerfChart) SetupTemplateFuncs(t *template.Template, funcMap template.F
 			return "", fmt.Errorf("expected relative secret file path, given path %v", secretRelativePath)
 		}
 
-		decodedData, ok := wc.decodedSecretFilesData[secretRelativePath]
+		decodedData, ok := wc.SecretsRuntimeData.DecodedSecretFilesData[secretRelativePath]
 
 		if !ok {
 			var secretFiles []string
-			for key := range wc.decodedSecretFilesData {
+			for key := range wc.SecretsRuntimeData.DecodedSecretFilesData {
 				secretFiles = append(secretFiles, key)
 			}
 
@@ -183,34 +188,37 @@ func (wc *WerfChart) SetupTemplateFuncs(t *template.Template, funcMap template.F
 		return decodedData, nil
 	}
 
-	SetupIncludeWrapperFuncs(funcMap)
-	SetupWerfImageDeprecationFunc(wc.chartExtenderContext, funcMap)
+	helpers.SetupIncludeWrapperFuncs(funcMap)
+	helpers.SetupWerfImageDeprecationFunc(wc.ChartExtenderContext, funcMap)
 }
 
 // LoadDir method for the chart.Extender interface
 func (wc *WerfChart) LoadDir(dir string) (bool, []*chart.ChartExtenderBufferedFile, error) {
-	files, err := wc.GiterminismManager.FileReader().LoadChartDir(wc.chartExtenderContext, dir)
+	files, err := wc.GiterminismManager.FileReader().LoadChartDir(wc.ChartExtenderContext, dir)
 	if err != nil {
-		return true, nil, err
+		return true, nil, fmt.Errorf("giterministic files loader failed: %s", err)
 	}
 
-	res, err := LoadChartDependencies(wc.chartExtenderContext, files, wc.HelmEnvSettings, wc.BuildChartDependenciesOpts)
+	res, err := LoadChartDependencies(wc.ChartExtenderContext, files, wc.HelmEnvSettings, wc.BuildChartDependenciesOpts)
+	if err != nil {
+		return true, res, fmt.Errorf("chart dependencies loader failed: %s", err)
+	}
 	return true, res, err
 }
 
 // LocateChart method for the chart.Extender interface
 func (wc *WerfChart) LocateChart(name string, settings *cli.EnvSettings) (bool, string, error) {
-	res, err := wc.GiterminismManager.FileReader().LocateChart(wc.chartExtenderContext, name, settings)
+	res, err := wc.GiterminismManager.FileReader().LocateChart(wc.ChartExtenderContext, name, settings)
 	return true, res, err
 }
 
 // ReadFile method for the chart.Extender interface
 func (wc *WerfChart) ReadFile(filePath string) (bool, []byte, error) {
-	res, err := wc.GiterminismManager.FileReader().ReadChartFile(wc.chartExtenderContext, filePath)
+	res, err := wc.GiterminismManager.FileReader().ReadChartFile(wc.ChartExtenderContext, filePath)
 	return true, res, err
 }
 
-func (wc *WerfChart) GetPostRenderer() (postrender.PostRenderer, error) {
+func (wc *WerfChart) GetPostRenderer() (*helm.ExtraAnnotationsAndLabelsPostRenderer, error) {
 	return wc.extraAnnotationsAndLabelsPostRenderer, nil
 }
 
@@ -249,15 +257,27 @@ func (wc *WerfChart) CreateNewBundle(ctx context.Context, destDir string, inputV
 		return nil, fmt.Errorf("unable to create dir %q: %s", destDir, err)
 	}
 
-	if vals, err := wc.MakeValues(inputVals); err != nil {
-		return nil, fmt.Errorf("unable to coalesce input values: %s", err)
-	} else if valsData, err := json.Marshal(vals); err != nil {
+	chartPath := filepath.Join(wc.GiterminismManager.ProjectDir(), wc.ChartDir)
+	chrt, err := loader.LoadDir(chartPath)
+	if err != nil {
+		return nil, fmt.Errorf("error loading chart %q: %s", chartPath, err)
+	}
+
+	vals, err := wc.MakeBundleValues(chrt, inputVals)
+	if err != nil {
+		return nil, fmt.Errorf("unable to construct bundle input values: %s", err)
+	}
+
+	valsData, err := json.MarshalIndent(vals, "", "  ")
+	if err != nil {
 		return nil, fmt.Errorf("unable to prepare values: %s", err)
-	} else {
-		valuesFile := filepath.Join(destDir, "values.yaml")
-		if err := ioutil.WriteFile(valuesFile, append(valsData, []byte("\n")...), os.ModePerm); err != nil {
-			return nil, fmt.Errorf("unable to write %q: %s", valuesFile, err)
-		}
+	}
+
+	logboek.Context(ctx).Debug().LogF("Saving bundle values:\n%s\n---\n", valsData)
+
+	valuesFile := filepath.Join(destDir, "values.yaml")
+	if err := ioutil.WriteFile(valuesFile, append(valsData, []byte("\n")...), os.ModePerm); err != nil {
+		return nil, fmt.Errorf("unable to write %q: %s", valuesFile, err)
 	}
 
 	if wc.HelmChart.Metadata == nil {
@@ -291,6 +311,12 @@ func (wc *WerfChart) CreateNewBundle(ctx context.Context, destDir string, inputV
 
 	for _, f := range wc.HelmChart.Templates {
 		p := filepath.Join(destDir, f.Name)
+		dir := filepath.Dir(p)
+
+		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+			return nil, fmt.Errorf("error creating dir %q: %s", dir, err)
+		}
+
 		if err := ioutil.WriteFile(p, append(f.Data, []byte("\n")...), os.ModePerm); err != nil {
 			return nil, fmt.Errorf("unable to write %q: %s", p, err)
 		}

@@ -15,10 +15,10 @@ import (
 	"github.com/werf/logboek"
 	"github.com/werf/logboek/pkg/types"
 
-	"github.com/werf/werf/pkg/git_repo/status"
 	"github.com/werf/werf/pkg/path_matcher"
 	"github.com/werf/werf/pkg/true_git"
 	"github.com/werf/werf/pkg/true_git/ls_tree"
+	"github.com/werf/werf/pkg/true_git/status"
 	"github.com/werf/werf/pkg/util"
 )
 
@@ -38,7 +38,12 @@ type Local struct {
 }
 
 type OpenLocalRepoOptions struct {
-	Dev bool
+	WithServiceHeadCommit    bool
+	ServiceHeadCommitOptions ServiceHeadCommit
+}
+
+type ServiceHeadCommit struct {
+	WithStagedChangesOnly bool // all tracked files if false
 }
 
 func OpenLocalRepo(name, workTreeDir string, opts OpenLocalRepoOptions) (l *Local, err error) {
@@ -61,12 +66,16 @@ func OpenLocalRepo(name, workTreeDir string, opts OpenLocalRepoOptions) (l *Loca
 		return l, err
 	}
 
-	if opts.Dev {
-		devHeadCommit, err := true_git.SyncDevBranchWithStagedFiles(
+	if opts.WithServiceHeadCommit {
+		devHeadCommit, err := true_git.SyncSourceWorktreeWithServiceWorktreeBranch(
 			context.Background(),
 			l.GitDir,
+			l.WorkTreeDir,
 			l.getRepoWorkTreeCacheDir(l.getRepoID()),
 			l.headCommit,
+			true_git.SyncSourceWorktreeWithServiceWorktreeBranchOptions{
+				OnlyStagedChanges: opts.ServiceHeadCommitOptions.WithStagedChangesOnly,
+			},
 		)
 		if err != nil {
 			return l, err
@@ -96,7 +105,12 @@ func newLocal(name, workTreeDir, gitDir string) (l *Local, err error) {
 }
 
 func (repo *Local) PlainOpen() (*git.Repository, error) {
-	return git.PlainOpen(repo.WorkTreeDir)
+	repository, err := git.PlainOpenWithOptions(repo.WorkTreeDir, &git.PlainOpenOptions{EnableDotGitCommonDir: true})
+	if err != nil {
+		return nil, fmt.Errorf("cannot open git work tree %q: %s", repo.WorkTreeDir, err)
+	}
+
+	return repository, nil
 }
 
 func (repo *Local) SyncWithOrigin(ctx context.Context) error {
@@ -174,7 +188,7 @@ func (repo *Local) GetMergeCommitParents(_ context.Context, commit string) ([]st
 type LsTreeOptions struct {
 	Commit        string
 	UseHeadCommit bool
-	Strict        bool
+	AllFiles      bool
 }
 
 func (repo *Local) LsTree(ctx context.Context, pathMatcher path_matcher.PathMatcher, opts LsTreeOptions) (*ls_tree.Result, error) {
@@ -185,7 +199,7 @@ func (repo *Local) LsTree(ctx context.Context, pathMatcher path_matcher.PathMatc
 
 	var lsTreeResult *ls_tree.Result
 	if err := repo.yieldRepositoryBackedByWorkTree(ctx, repo.headCommit, func(repository *git.Repository) (err error) {
-		lsTreeResult, err = mainLsTreeResult.LsTree(ctx, repository, pathMatcher)
+		lsTreeResult, err = mainLsTreeResult.LsTree(ctx, repository, pathMatcher, opts.AllFiles)
 		return err
 	}); err != nil {
 		return nil, err
@@ -214,7 +228,7 @@ func (repo *Local) getMainLsTreeResult(ctx context.Context, opts LsTreeOptions) 
 
 	var lsTreeResult *ls_tree.Result
 	if err := repo.yieldRepositoryBackedByWorkTree(ctx, commit, func(repository *git.Repository) error {
-		r, err := ls_tree.LsTree(ctx, repository, commit, path_matcher.NewSimplePathMatcher("", []string{}, false), opts.Strict)
+		r, err := ls_tree.LsTree(ctx, repository, commit, path_matcher.NewSimplePathMatcher("", []string{}), opts.AllFiles)
 		if err != nil {
 			return err
 		}
@@ -230,31 +244,17 @@ func (repo *Local) getMainLsTreeResult(ctx context.Context, opts LsTreeOptions) 
 	return lsTreeResult, nil
 }
 
-func (repo *Local) Status(ctx context.Context, pathMatcher path_matcher.PathMatcher) (*status.Result, error) {
-	result, err := repo.getMainStatusResult(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return result.Status(ctx, pathMatcher)
-}
-
-func (repo *Local) getMainStatusResult(ctx context.Context) (*status.Result, error) {
+func (repo *Local) status(ctx context.Context) (*status.Result, error) {
 	repo.mutex.Lock()
 	defer repo.mutex.Unlock()
 
 	if repo.statusResult == nil {
-		if err := repo.yieldRepositoryBackedByWorkTree(ctx, repo.headCommit, func(repository *git.Repository) error {
-			result, err := status.Status(ctx, repository, path_matcher.NewSimplePathMatcher("", []string{}, true))
-			if err != nil {
-				return err
-			}
-
-			repo.statusResult = result
-			return nil
-		}); err != nil {
+		result, err := status.Status(ctx, repo.WorkTreeDir)
+		if err != nil {
 			return nil, err
 		}
+
+		repo.statusResult = &result
 	}
 
 	return repo.statusResult, nil
@@ -268,7 +268,7 @@ func (repo *Local) IsAncestor(_ context.Context, ancestorCommit, descendantCommi
 	return true_git.IsAncestor(ancestorCommit, descendantCommit, repo.GitDir)
 }
 
-func (repo *Local) RemoteOriginUrl(ctx context.Context) (string, error) {
+func (repo *Local) RemoteOriginUrl(_ context.Context) (string, error) {
 	return repo.remoteOriginUrl(repo.WorkTreeDir)
 }
 
@@ -292,11 +292,11 @@ func (repo *Local) IsCommitExists(ctx context.Context, commit string) (bool, err
 	return repo.isCommitExists(ctx, repo.WorkTreeDir, repo.GitDir, commit)
 }
 
-func (repo *Local) TagsList(ctx context.Context) ([]string, error) {
+func (repo *Local) TagsList(_ context.Context) ([]string, error) {
 	return repo.tagsList(repo.WorkTreeDir)
 }
 
-func (repo *Local) RemoteBranchesList(ctx context.Context) ([]string, error) {
+func (repo *Local) RemoteBranchesList(_ context.Context) ([]string, error) {
 	return repo.remoteBranchesList(repo.WorkTreeDir)
 }
 
@@ -314,46 +314,190 @@ func (repo *Local) getRepoWorkTreeCacheDir(repoID string) string {
 	return filepath.Join(GetWorkTreeCacheDir(), "local", repoID)
 }
 
-func (repo *Local) ValidateSubmodules(ctx context.Context, matcher path_matcher.PathMatcher) error {
-	mainStatusResult, err := repo.getMainStatusResult(ctx)
+type UntrackedFilesFoundError StatusFilesFoundError
+type UncommittedFilesFoundError StatusFilesFoundError
+type StatusFilesFoundError struct {
+	PathList []string
+	error
+}
+
+type SubmoduleAddedAndNotCommittedError SubmoduleErrorBase
+type SubmoduleDeletedError SubmoduleErrorBase
+type SubmoduleHasUntrackedChangesError SubmoduleErrorBase
+type SubmoduleHasUncommittedChangesError SubmoduleErrorBase
+type SubmoduleCommitChangedError SubmoduleErrorBase
+type SubmoduleErrorBase struct {
+	SubmodulePath string
+	error
+}
+
+type ValidateStatusResultOptions StatusPathListOptions
+
+func (repo *Local) ValidateStatusResult(ctx context.Context, pathMatcher path_matcher.PathMatcher, opts ValidateStatusResultOptions) error {
+	statusResult, err := repo.status(ctx)
 	if err != nil {
 		return err
 	}
 
-	statusResult, err := mainStatusResult.Status(ctx, matcher)
-	if err != nil {
-		return err
+	var untrackedPathList []string
+	for _, path := range statusResult.UntrackedPathList {
+		if pathMatcher.IsPathMatched(path) {
+			untrackedPathList = append(untrackedPathList, path)
+		}
 	}
 
-	return repo.yieldRepositoryBackedByWorkTree(ctx, repo.headCommit, func(repository *git.Repository) error {
-		return statusResult.ValidateSubmodules(repository, repo.headCommit)
-	})
-}
-
-// IsFileModifiedLocally checks if the file has worktree or staged changes
-func (repo *Local) IsFileModifiedLocally(ctx context.Context, path string, options status.FilterOptions) (bool, error) {
-	statusResult, err := repo.getMainStatusResult(ctx)
-	if err != nil {
-		return false, err
+	if len(untrackedPathList) != 0 {
+		return UntrackedFilesFoundError{
+			PathList: untrackedPathList,
+			error:    fmt.Errorf("untracked files found"),
+		}
 	}
 
-	isModified := statusResult.IsFileModified(path, options)
+	if opts.OnlyUntrackedChanges {
+		return nil
+	}
 
-	return isModified, nil
+	var scope status.Scope
+	if opts.OnlyWorktreeChanges {
+		scope = statusResult.Worktree
+	} else {
+		scope = statusResult.IndexWithWorktree()
+	}
+
+	var uncommittedPathList []string
+	for _, path := range scope.PathList() {
+		if pathMatcher.IsPathMatched(path) {
+			uncommittedPathList = append(uncommittedPathList, path)
+		}
+	}
+
+	if len(uncommittedPathList) != 0 {
+		return UncommittedFilesFoundError{
+			PathList: uncommittedPathList,
+			error:    fmt.Errorf("uncommitted files found"),
+		}
+	}
+
+	return repo.validateStatusResultSubmodules(ctx, pathMatcher, scope)
 }
 
-func (repo *Local) GetModifiedLocallyFilePathList(ctx context.Context, matcher path_matcher.PathMatcher, options status.FilterOptions) ([]string, error) {
-	mainStatusResult, err := repo.getMainStatusResult(ctx)
+func (repo *Local) validateStatusResultSubmodules(_ context.Context, pathMatcher path_matcher.PathMatcher, scope status.Scope) error {
+	// No changes related to submodules.
+	if len(scope.Submodules()) == 0 {
+		return nil
+	}
+
+	for _, submodule := range scope.Submodules() {
+		if !pathMatcher.IsDirOrSubmodulePathMatched(submodule.Path) {
+			continue
+		}
+
+		if submodule.IsAdded {
+			return SubmoduleAddedAndNotCommittedError{
+				SubmodulePath: submodule.Path,
+				error:         fmt.Errorf("submodule is added but not committed"),
+			}
+		} else if submodule.IsDeleted {
+			return SubmoduleDeletedError{
+				SubmodulePath: submodule.Path,
+				error:         fmt.Errorf("submodule is deleted"),
+			}
+		} else if submodule.IsModified {
+			if submodule.HasUntrackedChanges {
+				return SubmoduleHasUntrackedChangesError{
+					SubmodulePath: submodule.Path,
+					error:         fmt.Errorf("submodule has untracked changes"),
+				}
+			}
+
+			if submodule.HasTrackedChanges {
+				return SubmoduleHasUncommittedChangesError{
+					SubmodulePath: submodule.Path,
+					error:         fmt.Errorf("submodule has uncommitted changes"),
+				}
+			}
+
+			if submodule.IsCommitChanged {
+				return SubmoduleCommitChangedError{
+					SubmodulePath: submodule.Path,
+					error:         fmt.Errorf("submodule commit is changed"),
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+type StatusPathListOptions struct {
+	OnlyWorktreeChanges  bool
+	OnlyUntrackedChanges bool
+}
+
+func (repo *Local) StatusPathList(ctx context.Context, pathMatcher path_matcher.PathMatcher, opts StatusPathListOptions) (list []string, err error) {
+	logboek.Context(ctx).Debug().
+		LogBlock("StatusPathList %q %v", pathMatcher.String(), opts).
+		Options(func(options types.LogBlockOptionsInterface) {
+			if !debugGiterminismManager() {
+				options.Mute()
+			}
+		}).
+		Do(func() {
+			list, err = repo.statusPathList(ctx, pathMatcher, opts)
+
+			if !debugGiterminismManager() {
+				logboek.Context(ctx).Debug().LogLn("list:", list)
+				logboek.Context(ctx).Debug().LogLn("err:", err)
+			}
+		})
+
+	return
+}
+
+func (repo *Local) statusPathList(ctx context.Context, pathMatcher path_matcher.PathMatcher, opts StatusPathListOptions) ([]string, error) {
+	statusResult, err := repo.status(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	statusResult, err := mainStatusResult.Status(ctx, matcher)
-	if err != nil {
-		return nil, err
+	var result []string
+	handlePathListFunc := func(pathList []string) {
+		for _, path := range pathList {
+			if pathMatcher.IsPathMatched(path) {
+				result = util.AddNewStringsToStringArray(result, path)
+			}
+		}
 	}
 
-	return statusResult.FilePathList(options), nil
+	handlePathListFunc(statusResult.UntrackedPathList)
+	if opts.OnlyUntrackedChanges {
+		return result, nil
+	}
+
+	var scope status.Scope
+	if opts.OnlyWorktreeChanges {
+		scope = statusResult.Worktree
+	} else {
+		scope = statusResult.IndexWithWorktree()
+	}
+	handlePathListFunc(scope.PathList())
+
+	for _, submodule := range scope.Submodules() {
+		if pathMatcher.IsDirOrSubmodulePathMatched(submodule.Path) {
+			result = util.AddNewStringsToStringArray(result, submodule.Path)
+		}
+	}
+
+	return result, nil
+}
+
+func (repo *Local) StatusIndexChecksum(ctx context.Context) (string, error) {
+	statusResult, err := repo.status(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	return statusResult.Index.Checksum(), nil
 }
 
 // ListCommitFilesWithGlob returns the list of files by the glob, follows symlinks.
@@ -361,21 +505,36 @@ func (repo *Local) GetModifiedLocallyFilePathList(ctx context.Context, matcher p
 func (repo *Local) ListCommitFilesWithGlob(ctx context.Context, commit string, dir string, glob string) (files []string, err error) {
 	var prefixWithoutPatterns string
 	prefixWithoutPatterns, glob = util.GlobPrefixWithoutPatterns(glob)
-	dir = filepath.Join(dir, prefixWithoutPatterns)
+	dirOrFileWithGlobPrefix := filepath.Join(dir, prefixWithoutPatterns)
 
-	pathMatcher := path_matcher.NewSimplePathMatcher(dir, []string{glob}, true)
+	pathMatcher := path_matcher.NewSimplePathMatcher(dirOrFileWithGlobPrefix, []string{glob})
 	if debugGiterminismManager() {
 		logboek.Context(ctx).Debug().LogLn("pathMatcher:", pathMatcher.String())
 	}
 
 	var result []string
-	if err := repo.WalkCommitFiles(ctx, commit, dir, pathMatcher, func(notResolvedPath string) error {
-		if pathMatcher.MatchPath(notResolvedPath) {
+	fileFunc := func(notResolvedPath string) error {
+		if pathMatcher.IsPathMatched(notResolvedPath) {
 			result = append(result, notResolvedPath)
 		}
 
 		return nil
-	}); err != nil {
+	}
+
+	isRegularFile, err := repo.IsCommitFileExist(ctx, commit, dirOrFileWithGlobPrefix)
+	if err != nil {
+		return nil, err
+	}
+
+	if isRegularFile {
+		if err := fileFunc(dirOrFileWithGlobPrefix); err != nil {
+			return nil, err
+		}
+
+		return result, nil
+	}
+
+	if err := repo.WalkCommitFiles(ctx, commit, dirOrFileWithGlobPrefix, pathMatcher, fileFunc); err != nil {
 		return nil, err
 	}
 
@@ -383,9 +542,7 @@ func (repo *Local) ListCommitFilesWithGlob(ctx context.Context, commit string, d
 }
 
 func (repo *Local) WalkCommitFiles(ctx context.Context, commit string, dir string, pathMatcher path_matcher.PathMatcher, fileFunc func(notResolvedPath string) error) error {
-	isDirMatched, shouldGoThroughDir := pathMatcher.ProcessDirOrSubmodulePath(dir)
-	possiblyDirMatched := isDirMatched || shouldGoThroughDir
-	if !possiblyDirMatched {
+	if !pathMatcher.IsDirOrSubmodulePathMatched(dir) {
 		return nil
 	}
 
@@ -403,9 +560,9 @@ func (repo *Local) WalkCommitFiles(ctx context.Context, commit string, dir strin
 		return fmt.Errorf("unable to resolve commit file %q: %s", dir, err)
 	}
 
-	result, err := repo.LsTree(ctx, path_matcher.NewSimplePathMatcher(resolvedDir, []string{}, true), LsTreeOptions{
-		Commit: commit,
-		Strict: true,
+	result, err := repo.LsTree(ctx, path_matcher.NewSimplePathMatcher(resolvedDir, []string{}), LsTreeOptions{
+		Commit:   commit,
+		AllFiles: true,
 	})
 	if err != nil {
 		return err
@@ -422,9 +579,7 @@ func (repo *Local) WalkCommitFiles(ctx context.Context, commit string, dir strin
 			panic(fmt.Sprintf("unexpected condition: %+v", lsTreeEntry))
 		}
 
-		isMatched, shouldGoThrough := pathMatcher.ProcessDirOrSubmodulePath(notResolvedPath)
-		possiblyMatched := isMatched || shouldGoThrough
-		if !possiblyMatched {
+		if !pathMatcher.IsDirOrSubmodulePathMatched(notResolvedPath) {
 			return nil
 		}
 
@@ -711,9 +866,8 @@ func (repo *Local) resolveCommitFilePath(ctx context.Context, commit, path strin
 }
 
 func (repo *Local) ReadCommitTreeEntryContent(ctx context.Context, commit, relPath string) ([]byte, error) {
-	lsTreeResult, err := repo.LsTree(ctx, path_matcher.NewSimplePathMatcher(relPath, []string{}, false), LsTreeOptions{
+	lsTreeResult, err := repo.LsTree(ctx, path_matcher.NewSimplePathMatcher(relPath, []string{}), LsTreeOptions{
 		Commit: commit,
-		Strict: true,
 	})
 	if err != nil {
 		return nil, err
@@ -728,6 +882,34 @@ func (repo *Local) ReadCommitTreeEntryContent(ctx context.Context, commit, relPa
 	}
 
 	return content, nil
+}
+
+func (repo *Local) IsCommitTreeEntryDirectory(ctx context.Context, commit, relPath string) (isDirectory bool, err error) {
+	logboek.Context(ctx).Debug().
+		LogBlock("IsCommitTreeEntryDirectory %q %q", commit, relPath).
+		Options(func(options types.LogBlockOptionsInterface) {
+			if !debugGiterminismManager() {
+				options.Mute()
+			}
+		}).
+		Do(func() {
+			isDirectory, err = repo.isCommitTreeEntryDirectory(ctx, commit, relPath)
+
+			if debugGiterminismManager() {
+				logboek.Context(ctx).Debug().LogF("isDirectory: %v\nerr: %q\n", isDirectory, err)
+			}
+		})
+
+	return
+}
+
+func (repo *Local) isCommitTreeEntryDirectory(ctx context.Context, commit, relPath string) (bool, error) {
+	entry, err := repo.getCommitTreeEntry(ctx, commit, relPath)
+	if err != nil {
+		return false, err
+	}
+
+	return entry.Mode == filemode.Dir || entry.Mode == filemode.Submodule, nil
 }
 
 func (repo *Local) IsCommitTreeEntryExist(ctx context.Context, commit, relPath string) (exist bool, err error) {
@@ -759,9 +941,8 @@ func (repo *Local) isTreeEntryExist(ctx context.Context, commit, relPath string)
 }
 
 func (repo *Local) getCommitTreeEntry(ctx context.Context, commit, path string) (*ls_tree.LsTreeEntry, error) {
-	lsTreeResult, err := repo.LsTree(ctx, path_matcher.NewSimplePathMatcher(path, []string{}, false), LsTreeOptions{
+	lsTreeResult, err := repo.LsTree(ctx, path_matcher.NewSimplePathMatcher(path, []string{}), LsTreeOptions{
 		Commit: commit,
-		Strict: true,
 	})
 	if err != nil {
 		return nil, err
@@ -773,9 +954,9 @@ func (repo *Local) getCommitTreeEntry(ctx context.Context, commit, path string) 
 }
 
 func (repo *Local) yieldRepositoryBackedByWorkTree(ctx context.Context, commit string, doFunc func(repository *git.Repository) error) error {
-	repository, err := git.PlainOpenWithOptions(repo.WorkTreeDir, &git.PlainOpenOptions{EnableDotGitCommonDir: true})
+	repository, err := repo.PlainOpen()
 	if err != nil {
-		return fmt.Errorf("cannot open git work tree %q: %s", repo.WorkTreeDir, err)
+		return err
 	}
 
 	commitHash, err := newHash(commit)

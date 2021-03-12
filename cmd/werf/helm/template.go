@@ -23,7 +23,7 @@ func NewTemplateCmd(actionConfig *action.Configuration, wc *chart_extender.WerfC
 		panic(err.Error())
 	}
 
-	cmd, helmAction := cmd_helm.NewTemplateCmd(actionConfig, os.Stdout, cmd_helm.TemplateCmdOptions{
+	cmd, _ := cmd_helm.NewTemplateCmd(actionConfig, os.Stdout, cmd_helm.TemplateCmdOptions{
 		PostRenderer: postRenderer,
 	})
 	SetupRenderRelatedWerfChartParams(cmd, &templateCmdData)
@@ -32,14 +32,11 @@ func NewTemplateCmd(actionConfig *action.Configuration, wc *chart_extender.WerfC
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		ctx := common.BackgroundContext()
 
-		if _, chartDir, err := helmAction.NameAndChart(args); err != nil {
-			return err
-		} else {
-			if err := InitRenderRelatedWerfChartParams(ctx, &templateCmdData, wc, chartDir); err != nil {
-				return fmt.Errorf("unable to init werf chart: %s", err)
-			}
-			return oldRunE(cmd, args)
+		if err := InitRenderRelatedWerfChartParams(ctx, &templateCmdData, wc); err != nil {
+			return fmt.Errorf("unable to init werf chart: %s", err)
 		}
+
+		return oldRunE(cmd, args)
 	}
 
 	return cmd

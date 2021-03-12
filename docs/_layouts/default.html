@@ -57,13 +57,16 @@
 <body>
   <div class="page">
     <div class="page__content">
-      {%- include topnav.html %}
-
+      {% if page.relation == "site" %}
+      {% include topnav-site.html %}
+      {% else %}
+      <!--#include virtual="/includes/topnav.html" -->
+      {%- endif %}
       <!-- Page Content -->
       {{ content }}
     </div>
 
-    {%- include footer.html %}
+    <!--#include virtual="/includes/footer.html" -->
   </div>
   {%- if site.url == 'https://werf.io' or site.url == 'https://ru.werf.io' %}
     <!-- Yandex.Metrika counter -->

@@ -1,7 +1,6 @@
 ---
 title: werf.yaml
 permalink: documentation/reference/werf_yaml.html
-sidebar: documentation
 description: Werf config file example
 toc: false
 ---
@@ -17,7 +16,7 @@ Project name should be unique within group of projects that shares build hosts a
 ### Warning on changing project name
 
 **WARNING**. You should never change project name, once it has been set up, unless you know what you are doing. Changing project name leads to issues:
-1. Invalidation of build cache. New images must be built. Old images must be cleaned up from local host and Docker registry manually.
+1. Invalidation of build cache. New images must be built. Old images must be cleaned up from local host and container registry manually.
 2. Creation of completely new Helm release. So if you already had deployed your application, then changed project name and deployed it again, there will be created another instance of the same application.
 
 Werf cannot automatically resolve project name change. Described issues must be resolved manually in such case.
@@ -35,7 +34,7 @@ deploy:
 
 ### Release name
 
-werf allows to define a custom release name template, which [used during deploy process]({{ "documentation/advanced/helm/basics.html#release-name" | true_relative_url }}) to generate a release name:
+werf allows to define a custom release name template, which [used during deploy process]({{ "/documentation/advanced/helm/releases/naming.html#release-name" | true_relative_url }}) to generate a release name:
 
 ```yaml
 project: PROJECT_NAME
@@ -55,14 +54,13 @@ deploy:
 ```
 {% endraw %}
 
-**NOTE**. Usage of the `HELM_RELEASE_EXTRA` environment variable should be allowed explicitly in the [werf-giterminism.yaml]({{ "documentation/advanced/configuration/giterminism.html" | true_relative_url }}) configuration in that case.
+**NOTE**. Usage of the `HELM_RELEASE_EXTRA` environment variable should be allowed explicitly in the [werf-giterminism.yaml]({{ "documentation/reference/werf_giterminism_yaml.html" | true_relative_url }}) configuration in that case.
 
-`deploy.helmReleaseSlug` defines whether to apply or not [slug]({{ "documentation/advanced/helm/basics.html#slugging-the-release-name" | true_relative_url }}) to generated helm release name. Default: `true`.
-
+`deploy.helmReleaseSlug` defines whether to apply or not [slug]({{ "/documentation/advanced/helm/releases/naming.html#slugging-the-release-name" | true_relative_url }}) to generated helm release name. Default: `true`.
 
 ### Kubernetes namespace
 
-werf allows to define a custom Kubernetes namespace template, which [used during deploy process]({{ "documentation/advanced/helm/basics.html#kubernetes-namespace" | true_relative_url }}) to generate a Kubernetes Namespace:
+werf allows to define a custom Kubernetes namespace template, which [used during deploy process]({{ "/documentation/advanced/helm/releases/naming.html#kubernetes-namespace" | true_relative_url }}) to generate a Kubernetes Namespace:
 
 ```yaml
 project: PROJECT_NAME
@@ -82,7 +80,7 @@ deploy:
 ```
 {% endraw %}
 
-`deploy.namespaceSlug` defines whether to apply or not [slug]({{ "documentation/advanced/helm/basics.html#slugging-kubernetes-namespace" | true_relative_url }}) to generated kubernetes namespace. Default: `true`.
+`deploy.namespaceSlug` defines whether to apply or not [slug]({{ "/documentation/advanced/helm/releases/naming.html#slugging-kubernetes-namespace" | true_relative_url }}) to generated kubernetes namespace. Default: `true`.
 
 ## Cleanup
 
@@ -243,7 +241,7 @@ You will need an image name when setting up helm templates or running werf comma
 
 ### Dockerfile builder
 
-Werf supports building images using Dockerfiles. Building image from Dockerfiles is the easiest way to start using werf in an existing project.
+Werf supports building images using Dockerfile. Building an image from Dockerfile is the easiest way to start using werf in an existing project.
 
 `werf.yaml` below describes an unnamed image built from `Dockerfile` which reside in the root of the project dir:
 
@@ -278,6 +276,29 @@ image: frontend
 dockerfile: frontend/Dockerfile
 context: frontend/
 ```
+
+#### contextAddFile
+
+The build context consists of the files from a directory, defined by `context` directive (the project directory by default), from the current project git repository commit.
+
+The `contextAddFile` directive allows adding an arbitrary file from the project directory to the build context.
+
+```yaml
+image: app
+context: app
+contextAddFile:
+ - file1
+ - dir/file2.out
+```
+
+The configuration describes the build context that consists of the following files:
+
+- `app/**/*`  from the current project git repository commit;
+- `app/file1` and `app/dir/file2.out` from the project directory.
+
+The `contextAddFile` files have a higher priority than the files from the current project git repository commit. When these files are crossing, the user will work with files from the project directory.
+
+> By default, the use of the `contextAddFile` directive is not allowed by giterminism (read more about it [here]({{ "/documentation/advanced/giterminism.html#contextaddfile" | true_relative_url }}))
 
 ### Stapel builder
 

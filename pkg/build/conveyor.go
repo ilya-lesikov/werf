@@ -292,22 +292,13 @@ func (c *Conveyor) GetRemoteGitRepo(key string) *git_repo.Remote {
 	return c.remoteGitRepos[key]
 }
 
-type ShouldBeBuiltOptions struct {
-	CustomTagFuncList []func(string) string
-}
-
-func (c *Conveyor) ShouldBeBuilt(ctx context.Context, opts ShouldBeBuiltOptions) error {
+func (c *Conveyor) ShouldBeBuilt(ctx context.Context) error {
 	if err := c.determineStages(ctx); err != nil {
 		return err
 	}
 
 	phases := []Phase{
-		NewBuildPhase(c, BuildPhaseOptions{
-			ShouldBeBuiltMode: true,
-			BuildOptions: BuildOptions{
-				CustomTagFuncList: opts.CustomTagFuncList,
-			},
-		}),
+		NewBuildPhase(c, BuildPhaseOptions{ShouldBeBuiltMode: true}),
 	}
 
 	if err := c.runPhases(ctx, phases, false); err != nil {
@@ -1114,7 +1105,7 @@ func prepareImageBasedOnImageFromDockerfile(ctx context.Context, imageFromDocker
 		return nil, err
 	}
 
-	dockerignorePathMatcher := path_matcher.NewDockerfileIgnorePathMatcher(imageFromDockerfileConfig.Context, dockerignorePatternMatcher, false)
+	dockerignorePathMatcher := path_matcher.NewDockerfileIgnorePathMatcher(filepath.Join(c.GiterminismManager().RelativeToGitProjectDir(), imageFromDockerfileConfig.Context), dockerignorePatternMatcher)
 
 	p, err := parser.Parse(bytes.NewReader(dockerfileData))
 	if err != nil {

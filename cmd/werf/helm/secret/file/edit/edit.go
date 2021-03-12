@@ -46,7 +46,7 @@ Encryption key should be in $WERF_SECRET_KEY or .werf_secret_key file`),
 	common.SetupTmpDir(&commonCmdData, cmd)
 	common.SetupHomeDir(&commonCmdData, cmd)
 
-	common.SetupGiterminismInspectorOptions(&commonCmdData, cmd)
+	common.SetupGiterminismOptions(&commonCmdData, cmd)
 
 	common.SetupLogOptions(&commonCmdData, cmd)
 
@@ -64,5 +64,5 @@ func runSecretEdit(ctx context.Context, filePath string) error {
 
 	workingDir := common.GetWorkingDir(&commonCmdData)
 
-	return secret_common.SecretEdit(ctx, secrets_manager.NewSecretsManager(workingDir, secrets_manager.SecretsManagerOptions{}), filePath, false)
+	return secret_common.SecretEdit(ctx, secrets_manager.NewSecretsManager(secrets_manager.SecretsManagerOptions{}), workingDir, filePath, false)
 }

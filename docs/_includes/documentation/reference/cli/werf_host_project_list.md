@@ -15,7 +15,14 @@ werf host project list [options]
 
 ```shell
       --dev=false
-            Enable developer mode (default $WERF_DEV)
+            Enable development mode (default $WERF_DEV).
+            The mode allows working with project files without doing redundant commits during       
+            debugging and development
+      --dev-mode='simple'
+            Set development mode (default $WERF_DEV_MODE or simple).
+            Two development modes are supported:
+            - simple: for working with the worktree state of the git repository
+            - strict: for working with the index state of the git repository
       --docker-config=''
             Specify docker config directory path. Default $WERF_DOCKER_CONFIG or $DOCKER_CONFIG or  
             ~/.docker (in the order of priority)
@@ -42,9 +49,8 @@ werf host project list [options]
             Enable verbose output (default $WERF_LOG_VERBOSE).
       --loose-giterminism=false
             Loose werf giterminism mode restrictions (NOTE: not all restrictions can be removed,    
-            more info                                                                               
-            https://werf.io/v1.2-alpha/documentation/advanced/configuration/giterminism.html,       
-            default $WERF_LOOSE_GITERMINISM)
+            more info https://werf.io/v1.2-alpha/documentation/advanced/giterminism.html, default   
+            $WERF_LOOSE_GITERMINISM)
   -q, --names-only=false
             Only show project names
       --tmp-dir=''

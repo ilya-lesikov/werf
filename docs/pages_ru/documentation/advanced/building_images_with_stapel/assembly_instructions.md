@@ -1,6 +1,5 @@
 ---
 title: Запуск инструкций сборки
-sidebar: documentation
 permalink: documentation/advanced/building_images_with_stapel/assembly_instructions.html
 directive_summary: shell_and_ansible
 ---
@@ -538,7 +537,7 @@ shell:
 
 ### Пример использования внешних зависимостей
 
-Параметры _CacheVersion_ можно использовать совместно с [шаблонами Go]({{ "documentation/advanced/configuration/supported_go_templates.html#шаблоны-go" | true_relative_url }}), чтобы определить зависимость _пользовательской стадии_ от файлов, не находящихся в git-репозитории.
+Параметры _CacheVersion_ можно использовать совместно с [шаблонами Go-шаблонизатора]({{ "documentation/reference/werf_yaml_template_engine.html" | true_relative_url }}), чтобы определить зависимость _пользовательской стадии_ от файлов, не находящихся в git-репозитории.
 
 {% raw %}
 ```yaml

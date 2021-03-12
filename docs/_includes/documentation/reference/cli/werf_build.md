@@ -41,20 +41,20 @@ werf build [IMAGE_NAME...] [options]
 {{ header }} Options
 
 ```shell
-      --add-custom-tag=[]
-            Set tag aliases for an image content-based tag.
-            For cleaning all aliases and a related content-based tag are treated as one.
-            It is necessary to use the image name shortcut %image% or %image_slug% in the tag       
-            format if there is more than one image in the werf config. 
-            Also, can be defined with $WERF_ADD_CUSTOM_TAG_* (e.g.                                  
-            $WERF_ADD_CUSTOM_TAG_1="%image%-tag1", $WERF_ADD_CUSTOM_TAG_2="%image%-tag2").
       --config=''
             Use custom configuration file (default $WERF_CONFIG or werf.yaml in working directory)
       --config-templates-dir=''
             Custom configuration templates directory (default $WERF_CONFIG_TEMPLATES_DIR or .werf   
             in working directory)
       --dev=false
-            Enable developer mode (default $WERF_DEV)
+            Enable development mode (default $WERF_DEV).
+            The mode allows working with project files without doing redundant commits during       
+            debugging and development
+      --dev-mode='simple'
+            Set development mode (default $WERF_DEV_MODE or simple).
+            Two development modes are supported:
+            - simple: for working with the worktree state of the git repository
+            - strict: for working with the index state of the git repository
       --dir=''
             Use specified project directory where project’s werf.yaml and other configuration files 
             should reside (default $WERF_DIR or current working directory)
@@ -66,7 +66,11 @@ werf build [IMAGE_NAME...] [options]
       --env=''
             Use specified environment (default $WERF_ENV)
       --follow=false
-            Follow git HEAD and run command for each new commit (default $WERF_FOLLOW)
+            Enable follow mode (default $WERF_FOLLOW).
+            The mode allows restarting the command on a new commit.
+            In development mode (--dev), it additionally tracks changes in the index state of the   
+            git repository, regardless of whether simple or strict development mode (--dev-mode) is 
+            used
       --git-work-tree=''
             Use specified git work tree dir (default $WERF_WORK_TREE or lookup for directory that   
             contains .git in the current or parent directories)
@@ -125,9 +129,8 @@ werf build [IMAGE_NAME...] [options]
             Enable verbose output (default $WERF_LOG_VERBOSE).
       --loose-giterminism=false
             Loose werf giterminism mode restrictions (NOTE: not all restrictions can be removed,    
-            more info                                                                               
-            https://werf.io/v1.2-alpha/documentation/advanced/configuration/giterminism.html,       
-            default $WERF_LOOSE_GITERMINISM)
+            more info https://werf.io/v1.2-alpha/documentation/advanced/giterminism.html, default   
+            $WERF_LOOSE_GITERMINISM)
   -p, --parallel=true
             Run in parallel (default $WERF_PARALLEL)
       --parallel-tasks-limit=5
@@ -135,6 +138,12 @@ werf build [IMAGE_NAME...] [options]
             $WERF_PARALLEL_TASKS_LIMIT or 5)
       --repo=''
             Docker Repo to store stages (default $WERF_REPO)
+      --repo-container-registry=''
+            Choose repo container registry.
+            The following container registries are supported: ecr, acr, default, dockerhub, gcr,    
+            github, gitlab, harbor, quay.
+            Default $WERF_REPO_CONTAINER_REGISTRY or auto mode (detect container registry by repo   
+            address).
       --repo-docker-hub-password=''
             Docker Hub password (default $WERF_REPO_DOCKER_HUB_PASSWORD)
       --repo-docker-hub-token=''
@@ -147,11 +156,6 @@ werf build [IMAGE_NAME...] [options]
             Harbor password (default $WERF_REPO_HARBOR_PASSWORD)
       --repo-harbor-username=''
             Harbor username (default $WERF_REPO_HARBOR_USERNAME)
-      --repo-implementation=''
-            Choose repo implementation.
-            The following docker registry implementations are supported: ecr, acr, default,         
-            dockerhub, gcr, github, gitlab, harbor, quay.
-            Default $WERF_REPO_IMPLEMENTATION or auto mode (detect implementation by a registry).
       --repo-quay-token=''
             quay.io token (default $WERF_REPO_QUAY_TOKEN)
       --report-format='json'
@@ -196,9 +200,9 @@ werf build [IMAGE_NAME...] [options]
             Address of synchronizer for multiple werf processes to work with a single repo.
             
             Default:
-            * $WERF_SYNCHRONIZATION or
-            * :local if --repo is not specified or
-            * kubernetes://werf-synchronization if --repo is specified
+             - $WERF_SYNCHRONIZATION, or
+             - :local if --repo is not specified, or
+             - https://synchronization.werf.io if --repo has been specified.
             
             The same address should be specified for all werf processes that work with a single     
             repo. :local address allows execution of werf processes from a single host only

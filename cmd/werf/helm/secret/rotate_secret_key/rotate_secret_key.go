@@ -60,7 +60,7 @@ Command will extract data with the old key, generate new secret data and rewrite
 	common.SetupConfigPath(&commonCmdData, cmd)
 	common.SetupEnvironment(&commonCmdData, cmd)
 
-	common.SetupGiterminismInspectorOptions(&commonCmdData, cmd)
+	common.SetupGiterminismOptions(&commonCmdData, cmd)
 
 	common.SetupLogOptions(&commonCmdData, cmd)
 
@@ -95,9 +95,9 @@ func runRotateSecretKey(ctx context.Context, cmd *cobra.Command, secretValuesPat
 		return fmt.Errorf("getting helm chart dir failed: %s", err)
 	}
 
-	secretsManager := secrets_manager.NewSecretsManager(giterminismManager.ProjectDir(), secrets_manager.SecretsManagerOptions{})
+	secretsManager := secrets_manager.NewSecretsManager(secrets_manager.SecretsManagerOptions{})
 
-	newEncoder, err := secretsManager.GetYamlEncoder(ctx)
+	newEncoder, err := secretsManager.GetYamlEncoder(ctx, giterminismManager.ProjectDir())
 	if err != nil {
 		common.PrintHelp(cmd)
 		return err
