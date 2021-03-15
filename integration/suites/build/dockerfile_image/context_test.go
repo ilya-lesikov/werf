@@ -123,7 +123,7 @@ var _ = Describe("context", func() {
 					"commit", "-m", "+",
 				)
 			},
-			expectedWindowsDigest: "b1c6be25d30d2de58df66e46dc8a328176cc2744dc3bfc2ae8d2917b",
+			expectedWindowsDigest: "031fd5bc65df720d766d75dbe443fd7a64d6d30b517fa475f7733b78",
 			expectedUnixDigest:    "a338b7391a510bd0a02b9f45efeb25b7cff0703c6a8f84e162b56b20",
 		}),
 	)
