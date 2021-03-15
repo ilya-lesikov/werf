@@ -90,7 +90,7 @@ var _ = Describe("context", func() {
 			},
 			expectedDigest: "26f6bd1d7de41678c4dcfae8a3785d9655ee6b13c16e4498abb43d0b",
 		}),
-		Entry("contextAdd", entry{
+		Entry("file from contextAddFile added to context", entry{
 			prepareFixturesFunc: func() {
 				utils.CopyIn(utils.FixturePath("context", "context_add_file"), SuiteData.WerfRepoWorktreeDir)
 
@@ -107,6 +107,24 @@ var _ = Describe("context", func() {
 			},
 			expectedWindowsDigest: "b1c6be25d30d2de58df66e46dc8a328176cc2744dc3bfc2ae8d2917b",
 			expectedUnixDigest:    "48a81bd49a6d299f78b463628ef6dd2436c2fce6736f2ad624b92e7f",
+		}),
+		Entry("dir from contextAddFile added to context", entry{
+			prepareFixturesFunc: func() {
+				utils.CopyIn(utils.FixturePath("context", "context_add_dir"), SuiteData.WerfRepoWorktreeDir)
+
+				utils.RunSucceedCommand(
+					SuiteData.WerfRepoWorktreeDir,
+					"git",
+					"add", "werf.yaml", "werf-giterminism.yaml", ".dockerignore", "Dockerfile",
+				)
+				utils.RunSucceedCommand(
+					SuiteData.WerfRepoWorktreeDir,
+					"git",
+					"commit", "-m", "+",
+				)
+			},
+			expectedWindowsDigest: "b1c6be25d30d2de58df66e46dc8a328176cc2744dc3bfc2ae8d2917b",
+			expectedUnixDigest:    "a338b7391a510bd0a02b9f45efeb25b7cff0703c6a8f84e162b56b20",
 		}),
 	)
 })
