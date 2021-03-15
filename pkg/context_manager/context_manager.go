@@ -118,19 +118,19 @@ func AddContextAddFileToContextArchive(ctx context.Context, originalArchivePath 
 
 	pathsToExcludeFromSourceArchive := contextAddFiles
 	if err := util.CreateArchiveBasedOnAnotherOne(ctx, originalArchivePath, destinationArchivePath, pathsToExcludeFromSourceArchive, func(tw *tar.Writer) error {
-		filePathsToCopy, err := GetContextAddFilePaths(projectDir, contextDir, contextAddFiles)
+		addFilePathsToCopy, err := GetContextAddFilePaths(projectDir, contextDir, contextAddFiles)
 		if err != nil {
 			return err
 		}
 
-		for _, filePathToCopy := range filePathsToCopy {
-			tarEntryName, err := filepath.Rel(filepath.Join(projectDir, contextDir), filePathToCopy)
+		for _, addFilePathToCopy := range addFilePathsToCopy {
+			tarEntryName, err := filepath.Rel(filepath.Join(projectDir, contextDir), addFilePathToCopy)
 			if err != nil {
-				return fmt.Errorf("unable to get context relative path for %q: %s", filePathToCopy, err)
+				return fmt.Errorf("unable to get context relative path for %q: %s", addFilePathToCopy, err)
 			}
 			tarEntryName = filepath.ToSlash(tarEntryName)
-			if err := util.CopyFileIntoTar(tw, tarEntryName, filePathToCopy); err != nil {
-				return fmt.Errorf("unable to add contextAddFile %q to archive %q: %s", filePathToCopy, destinationArchivePath, err)
+			if err := util.CopyFileIntoTar(tw, tarEntryName, addFilePathToCopy); err != nil {
+				return fmt.Errorf("unable to add contextAddFile %q to archive %q: %s", addFilePathToCopy, destinationArchivePath, err)
 			}
 			logboek.Context(ctx).Debug().LogF("Extra file was added to the current context: %q\n", tarEntryName)
 		}
