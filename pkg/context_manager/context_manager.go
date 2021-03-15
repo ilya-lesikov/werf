@@ -54,7 +54,7 @@ func GetContextAddFilePaths(projectDir string, contextDir string, contextAddFile
 		}
 	}
 
-	return addFilePaths, nil
+	return util.UniqStrings(addFilePaths), nil
 }
 
 func ContextAddFileChecksum(ctx context.Context, projectDir string, contextDir string, contextAddFiles []string, matcher path_matcher.PathMatcher) (string, error) {

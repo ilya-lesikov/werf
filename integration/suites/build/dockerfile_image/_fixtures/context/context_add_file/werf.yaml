@@ -4,4 +4,6 @@ configVersion: 1
 
 image: ~
 dockerfile: Dockerfile
-contextAddFile: test/contextAddFile
+contextAddFile:
+- test/contextAddFile
+- test/contextAddDir
