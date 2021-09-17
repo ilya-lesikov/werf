@@ -1,0 +1,19 @@
+name: Do release PR or GitHub release
+on:
+  push:
+    branches:
+    - main
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: werf/third-party-release-please-action@werf
+      with:
+        release-type: go
+        bump-minor-pre-major: true
+        bump-patch-for-minor-pre-major: true
+#        FIXME(ilya-lesikov):
+        release-notes-header: 'HEADER: {{> version }}'
+#        FIXME(ilya-lesikov):
+        release-notes-footer: 'FOOTER: {{> version }}'
