@@ -1,241 +1,160 @@
 name: Tests
 on:
-  pull_request:
-    types: [labeled]
+  push:
+    paths:
+      - '.github/workflows/tests.yml'
+      - '**/*.go'
+  schedule:
+    - cron:  '0 8 * * *'
   repository_dispatch:
-    types: [tests]
-env:
-  GO111MODULE: on
+    types: [ tests ]
 
 jobs:
-
-  unlabel:
-    name: Label taking off
-    if: github.event_name == 'pull_request' && github.event.label.name == 'run tests'
-    runs-on: ubuntu-latest
-    steps:
-
-    - uses: actions/github-script@v1
-      with:
-        github-token: ${{secrets.GITHUB_TOKEN}}
-        script: "github.issues.removeLabel({...context.issue, name: '${{ github.event.label.name }}' })"
-
   precompiled_tests_binaries:
     name: Precompiled tests binaries
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macOS-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    if: github.event_name == 'repository_dispatch' || (github.event_name == 'pull_request' && github.event.label.id == 1745044226) # run tests label
+        os: [ ubuntu-latest ]
+    runs-on: "${{ matrix.os }}"
     steps:
 
-    - name: Set up Go 1.14
-      uses: actions/setup-go@v1
-      with:
-        go-version: 1.14
-      id: go
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.16
 
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-    - name: Compile tests binaries
-      run: |
-        # unit tests binaries
-        ./scripts/tests/precompiled_tests_binaries.sh ./cmd ./precompiled_tests_binaries/unit
-        ./scripts/tests/precompiled_tests_binaries.sh ./pkg ./precompiled_tests_binaries/unit
+      - name: Compile tests binaries
+        run: |
+          # e2e tests binaries
+          ./scripts/ci/precompiled_tests_binaries.sh ./e2e ./precompiled_tests_binaries/e2e
 
-        # integration tests binaries
-        ./scripts/tests/precompiled_tests_binaries.sh ./integration ./precompiled_tests_binaries/integration
+          # trdl with coverage binary
+          ./scripts/ci/trdl_with_coverage.sh
+        shell: bash
 
-        # integration_k8s tests binaries
-        ./scripts/tests/precompiled_tests_binaries.sh ./integration_k8s ./precompiled_tests_binaries/integration_k8s
-      shell: bash
+      - name: Upload e2e tests binaries
+        uses: actions/upload-artifact@master
+        with:
+          name: "${{ matrix.os }}_e2e_tests_binaries"
+          path: precompiled_tests_binaries/e2e
+          if-no-files-found: error
 
-    - name: Compile tests werf binary (ubuntu-latest)
-      run: GOBIN=$PWD ./go-build.sh
-      if: matrix.os == 'ubuntu-latest'
+      - name: Upload trdl with coverage binary
+        uses: actions/upload-artifact@master
+        with:
+          name: "${{ matrix.os }}_trdl_with_coverage"
+          path: bin/tests/trdl_with_coverage
+          if-no-files-found: error
 
-    - name: Upload unit tests binaries
-      uses: actions/upload-artifact@master
-      with:
-        name: "${{ matrix.os }}_unit_tests_binaries"
-        path: precompiled_tests_binaries/unit
-
-    - name: Upload integration tests binaries
-      uses: actions/upload-artifact@master
-      with:
-        name: "${{ matrix.os }}_integration_tests_binaries"
-        path: precompiled_tests_binaries/integration
-
-    - name: Upload integration k8s tests binaries
-      uses: actions/upload-artifact@master
-      with:
-        name: "${{ matrix.os }}_integration_k8s_tests_binaries"
-        path: precompiled_tests_binaries/integration_k8s
-
-    - name: Upload werf binary (ubuntu-latest)
-      uses: actions/upload-artifact@master
-      with:
-        name: "${{ matrix.os }}_werf_binary"
-        path: werf
-      if: matrix.os == 'ubuntu-latest'
-
-  unit_tests:
-    name: Unit tests
+  e2e_tests:
+    name: End-to-end tests
     needs: precompiled_tests_binaries
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macOS-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+        os: [ ubuntu-latest ]
+    runs-on: "${{ matrix.os }}"
     steps:
 
-    - name: Set up Go 1.14
-      uses: actions/setup-go@v1
-      with:
-        go-version: 1.14
-      id: go
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.16
 
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-    - name: Download unit tests binaries
-      uses: actions/download-artifact@master
-      with:
-        name: "${{ matrix.os }}_unit_tests_binaries"
-        path: .
+      - name: Download tests binaries
+        uses: actions/download-artifact@master
+        with:
+          name: "${{ matrix.os }}_e2e_tests_binaries"
+          path: .
 
-    - name: Prepare environment
-      run: find . -type f \( -name '*.test' -or -name '*.test.exe' \) -exec chmod +x {} \;
-      shell: bash
+      - name: Download trdl with coverage binary
+        uses: actions/download-artifact@master
+        with:
+          name: "${{ matrix.os }}_trdl_with_coverage"
+          path: .
 
-    - name: Test
-      run: |
-        test_binaries=$(find . -type f \( -name '*.test' -or -name '*.test.exe' \))
-        for test_binary in $test_binaries; do
-          $test_binary -test.v
-        done
-      shell: bash
+      - name: Prepare environment
+        run: |
+          export TRDL_TEST_COVERAGE_DIR=$GITHUB_WORKSPACE/tests_coverage/${{ matrix.os }}
+          mkdir -p $TRDL_TEST_COVERAGE_DIR
+          echo TRDL_TEST_COVERAGE_DIR=$TRDL_TEST_COVERAGE_DIR >> $GITHUB_ENV
 
-  integration_tests:
-    name: Integration tests
-    needs: precompiled_tests_binaries
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest]
-        extra-find-args:
-        - "-name 'git.test'"
-        - "-name 'ansible.test'"
-        - "! -name 'git.test' ! -name 'guides.test' ! -name 'ansible.test'"
-    runs-on: ${{ matrix.os }}
+          chmod +x trdl_with_coverage
+          find e2e/tests -type f -name '*.test' -exec chmod +x {} \;
+
+          go install github.com/theupdateframework/go-tuf/cmd/tuf
+          make minio_up
+
+          go install github.com/onsi/ginkgo/ginkgo
+        shell: bash
+
+      - name: Test
+        run: |
+          test_binaries=$(find e2e/tests -type f -name '*.test')
+          TRDL_TEST_BINARY_PATH=$GITHUB_WORKSPACE/trdl_with_coverage ginkgo -p -keepGoing $test_binaries
+        shell: bash
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@master
+        with:
+          name: tests_coverage
+          path: tests_coverage
+
+  upload_coverage:
+    name: Upload coverage
+    needs: e2e_tests
+    runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.14
-      uses: actions/setup-go@v1
-      with:
-        go-version: 1.14
-      id: go
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.16
 
-    - name: Checkout code
-      uses: actions/checkout@v2
-      if: matrix.extra-find-args != '! -name ''git.test'' ! -name ''guides.test'' ! -name ''ansible.test'''
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-    - name: Checkout code (git history as fixtures for tests)
-      uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-      if: matrix.extra-find-args == '! -name ''git.test'' ! -name ''guides.test'' ! -name ''ansible.test'''
+      - name: Download coverage artifact
+        uses: actions/download-artifact@master
+        with:
+          name: tests_coverage
+          path: tests_coverage
 
-    - name: Download integration tests binaries
-      uses: actions/download-artifact@master
-      with:
-        name: "${{ matrix.os }}_integration_tests_binaries"
-        path: .
+      - name: Prepare environment
+        run: |
+          curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
+          chmod +x ./cc-test-reporter
 
-    - name: Download werf binary
-      uses: actions/download-artifact@master
-      with:
-        name: "${{ matrix.os }}_werf_binary"
-        path: .
+          go build github.com/wadey/gocovmerge
+          chmod +x ./gocovmerge
 
-    - name: Prepare environment
-      run: |
-        ./scripts/ci/git.sh
+          echo TRDL_TEST_COVERAGE_DIR=tests_coverage >> $GITHUB_ENV
 
-        go build github.com/onsi/ginkgo/ginkgo
+      - name: Prepare coverage file
+        run: |
+          find $TRDL_TEST_COVERAGE_DIR -type f -exec \
+            sed -i -e "s|/home/ubuntu/actions-runner/_work/werf/trdl|github.com/werf/trdl|g" {} +
 
-        chmod +x werf
-        find integration -type f -name '*.test' -exec chmod +x {} \;
-      shell: bash
+          coverage_files=$(find $TRDL_TEST_COVERAGE_DIR -name '*.out')
+          ./gocovmerge ${coverage_files[@]} > coverage.out
 
-    - name: Test
-      run: |
-        test_binaries=$(find integration -type f -name '*.test' ${{ matrix.extra-find-args }})
-        WERF_TEST_BINARY_PATH=$GITHUB_WORKSPACE/werf ./ginkgo -p -keepGoing $test_binaries
-      shell: bash
+      - name: Format and upload
+        run: |
+          export GIT_BRANCH=${GITHUB_REF:11}
+          export GIT_COMMIT_SHA=$GITHUB_SHA
 
-  integration_k8s_tests:
-    name: Integration k8s tests
-    needs: precompiled_tests_binaries
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest]
-        k8s_version: [1.11, 1.12, 1.13, 1.14, 1.15, 1.16]
+          ./cc-test-reporter format-coverage \
+              -t=gocov \
+              -p=github.com/werf/trdl/ \
+              coverage.out
 
-    runs-on: ${{ matrix.os }}
-    steps:
-
-    - name: Set up Go 1.14
-      uses: actions/setup-go@v1
-      with:
-        go-version: 1.14
-      id: go
-
-    - name: Checkout code
-      uses: actions/checkout@v2
-
-    - name: Download integration k8s tests binaries
-      uses: actions/download-artifact@master
-      with:
-        name: "${{ matrix.os }}_integration_k8s_tests_binaries"
-        path: .
-
-    - name: Download werf binary
-      uses: actions/download-artifact@master
-      with:
-        name: "${{ matrix.os }}_werf_binary"
-        path: .
-
-    - name: Prepare environment
-      run: |
-        ./scripts/ci/git.sh
-
-        go build github.com/onsi/ginkgo/ginkgo
-
-        find integration_k8s -type f -name '*.test' -exec chmod +x {} \;
-
-        chmod +x werf
-
-        echo ::set-env name=WERF_TEST_K8S_BASE64_KUBECONFIG::$(printenv WERF_TEST_K8S_BASE64_KUBECONFIG_$(echo ${{ matrix.k8s_version }} | tr . _))
-      shell: bash
-      env:
-        WERF_TEST_K8S_BASE64_KUBECONFIG_1_11: ${{ secrets.WERF_TEST_K8S_BASE64_KUBECONFIG_1_11 }}
-        WERF_TEST_K8S_BASE64_KUBECONFIG_1_12: ${{ secrets.WERF_TEST_K8S_BASE64_KUBECONFIG_1_12 }}
-        WERF_TEST_K8S_BASE64_KUBECONFIG_1_13: ${{ secrets.WERF_TEST_K8S_BASE64_KUBECONFIG_1_13 }}
-        WERF_TEST_K8S_BASE64_KUBECONFIG_1_14: ${{ secrets.WERF_TEST_K8S_BASE64_KUBECONFIG_1_14 }}
-        WERF_TEST_K8S_BASE64_KUBECONFIG_1_15: ${{ secrets.WERF_TEST_K8S_BASE64_KUBECONFIG_1_15 }}
-        WERF_TEST_K8S_BASE64_KUBECONFIG_1_16: ${{ secrets.WERF_TEST_K8S_BASE64_KUBECONFIG_1_16 }}
-
-    - name: Test
-      run: |
-        source ./scripts/ci/integration_k8s_tests_before_hook.sh
-        test_binaries=$(find integration_k8s -type f -name '*.test')
-        WERF_TEST_BINARY_PATH=$GITHUB_WORKSPACE/werf ./ginkgo -p -keepGoing $test_binaries
-      shell: bash
-      env:
-        WERF_TEST_K8S_DOCKER_REGISTRY: ${{ secrets.WERF_TEST_K8S_DOCKER_REGISTRY }}
-        WERF_TEST_K8S_DOCKER_REGISTRY_USERNAME: ${{ secrets.WERF_TEST_K8S_DOCKER_REGISTRY_USERNAME }}
-        WERF_TEST_K8S_DOCKER_REGISTRY_PASSWORD: ${{ secrets.WERF_TEST_K8S_DOCKER_REGISTRY_PASSWORD }}
+          ./cc-test-reporter upload-coverage
+        env:
+          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
