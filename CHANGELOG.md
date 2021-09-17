@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.5.0](https://www.github.com/ilya-lesikov/werf/compare/v1.4.0...v1.5.0) (2021-09-17)
+
+
+### ⚠ BREAKING CHANGES
+
+* xxx
+
+### Features
+
+* xxx ([0e0e9ef](https://www.github.com/ilya-lesikov/werf/commit/0e0e9efa8215640302a8d351e0bf8a01e757685b))
+
 ## [1.4.0](https://www.github.com/ilya-lesikov/werf/compare/v1.3.0...v1.4.0) (2021-09-17)
 
 
