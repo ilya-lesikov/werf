@@ -7,6 +7,13 @@
 
 * xxx ([727d42d](https://www.github.com/ilya-lesikov/werf/commit/727d42ddffb930168c09d3c27833993ced4828ea))
 
+### [1.5.2](https://www.github.com/ilya-lesikov/werf/compare/v1.5.1...v1.5.2) (2021-09-17)
+
+
+### Bug Fixes
+
+* xxx ([727d42d](https://www.github.com/ilya-lesikov/werf/commit/727d42ddffb930168c09d3c27833993ced4828ea))
+
 ### [1.5.1](https://www.github.com/ilya-lesikov/werf/compare/v1.5.0...v1.5.1) (2021-09-17)
 
 
