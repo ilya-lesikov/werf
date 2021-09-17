@@ -1,0 +1,26 @@
+# Changelog
+
+## [1.3.0](https://www.github.com/ilya-lesikov/werf/compare/v1.2.18+fix1...v1.3.0) (2021-09-17)
+
+
+### ⚠ BREAKING CHANGES
+
+* xxx
+* xxx
+* xxx
+* xxx
+
+### Features
+
+* xxx ([64e83f4](https://www.github.com/ilya-lesikov/werf/commit/64e83f436f41f4ba24adc90b46d960205bbe73b6))
+* xxx ([8c23242](https://www.github.com/ilya-lesikov/werf/commit/8c23242c411efdb7b7a60f793ca1babd6cf8cd5b))
+* xxx ([1a16eec](https://www.github.com/ilya-lesikov/werf/commit/1a16eec0a6ef7230080d0fe31c921fa8c567fea1))
+* xxx ([7401e94](https://www.github.com/ilya-lesikov/werf/commit/7401e941dcc07ef9c73abb7b57af42c2c6933577))
+
+
+### Bug Fixes
+
+* broken release building script, fix site installation instructions ([3dc31f2](https://www.github.com/ilya-lesikov/werf/commit/3dc31f2e4811084b0df93f017f832413c315740e))
+* **dev:** fail on retry of a command with a deleted file ([d286821](https://www.github.com/ilya-lesikov/werf/commit/d28682109d096bffba1e4ba78c63405d2baaf84d))
+* **dev:** special characters not handled properly ([1e72887](https://www.github.com/ilya-lesikov/werf/commit/1e72887d20119f8268a20b1fe84a869741416321))
+* force disable CGO for release builds ([7a69ca7](https://www.github.com/ilya-lesikov/werf/commit/7a69ca736c457dd046d10b2fa43b8f2e296f143f))
