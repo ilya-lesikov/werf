@@ -1,7 +1,9 @@
-name: Multiwerf Release Publisher
+name: Multiwerf Release Pub lisher (new)
+
 on:
   push:
-    tags: v*
+    tags: 
+      - "v*"
 
 env:
   GO111MODULE: on
