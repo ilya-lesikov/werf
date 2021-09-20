@@ -1,5 +1,12 @@
 # Changelog
 
+### [1.2.24](https://www.github.com/alexey-igrychev/werf/compare/v1.2.23...v1.2.24) (2021-09-20)
+
+
+### Features
+
+* GOGOGO ([f119fe5](https://www.github.com/alexey-igrychev/werf/commit/f119fe50f8b4f8ec0063317675b3ef6ce0221d1e))
+
 ### [1.2.23](https://www.github.com/alexey-igrychev/werf/compare/v1.2.22...v1.2.23) (2021-09-20)
 
 
