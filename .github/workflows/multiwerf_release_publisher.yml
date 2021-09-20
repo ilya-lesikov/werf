@@ -3,7 +3,6 @@ name: Multiwerf Release Pub lisher (new)
 on:
   release:
     types: 
-      - created
 
 env:
   GO111MODULE: on
