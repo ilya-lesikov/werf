@@ -1,5 +1,5 @@
 name: 🪲 Bug
-description: Leave a bug report
+description: Submit a bug report
 body:
   - type: checkboxes
     attributes:
