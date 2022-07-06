@@ -3,13 +3,10 @@ description: "---"
 body:
   - type: checkboxes
     attributes:
-      label: "Required"
+      label: "Before proceeding"
       options:
         - label: "I haven't found similar bug report in [issues](https://github.com/werf/werf/issues)"
           required: true
-  - type: textarea
-    attributes:
-      label: Short description
   - type: textarea
     attributes:
       label: How to reproduce
@@ -22,7 +19,7 @@ body:
       required: true
   - type: textarea
     attributes:
-      label: Actual result
+      label: Current result
     validations:
       required: true
   - type: textarea
