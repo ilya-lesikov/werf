@@ -1,4 +1,4 @@
-name: Bug
+name: 🪲 Bug
 description: Leave a bug report
 body:
   - type: checkboxes
