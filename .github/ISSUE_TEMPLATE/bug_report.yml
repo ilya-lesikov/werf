@@ -7,6 +7,12 @@ body:
       options:
         - label: "I haven't found similar [issue](https://github.com/werf/werf/issues)"
           required: true
+  - type: input
+    attributes:
+      label: Version
+      placeholder: "1.2.3"
+    validations:
+      required: true
   - type: textarea
     attributes:
       label: How to reproduce
@@ -24,12 +30,6 @@ body:
   - type: textarea
     attributes:
       label: Expected result
-    validations:
-      required: true
-  - type: input
-    attributes:
-      label: werf version
-      placeholder: "1.2.3"
     validations:
       required: true
   - type: textarea
