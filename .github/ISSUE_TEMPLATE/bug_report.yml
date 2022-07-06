@@ -3,7 +3,7 @@ description: "---"
 body:
   - type: checkboxes
     attributes:
-      label: " "
+      label: "---"
       options:
         - label: "I haven't found similar bug report in [issues](https://github.com/werf/werf/issues)"
           required: true
