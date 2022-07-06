@@ -5,7 +5,7 @@ body:
     attributes:
       label: "Before proceeding"
       options:
-        - label: "I haven't found similar bug report in [issues](https://github.com/werf/werf/issues)"
+        - label: "I haven't found similar [issue](https://github.com/werf/werf/issues)"
           required: true
   - type: textarea
     attributes:
