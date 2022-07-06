@@ -5,7 +5,7 @@ body:
     attributes:
       label: Checklist
       options:
-        - label: "I haven't found similar bug reports in [issues](https://github.com/werf/werf/issues)"
+        - label: "I haven't found similar bug report in [issues](https://github.com/werf/werf/issues)"
           required: true
   - type: textarea
     attributes:
