@@ -1,0 +1,43 @@
+name: Bug report
+body:
+  - type: checkboxes
+    attributes:
+      options:
+        - label: "I haven't found similar bug reports in [issues](https://github.com/werf/werf/issues)"
+          required: true
+  - type: textarea
+    attributes:
+      label: Short description
+  - type: textarea
+    attributes:
+      label: How to reproduce
+      placeholder: |
+        Example:
+        1. In this environment...
+        2. With this configuration...
+        3. Run '...'
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Actual result
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: werf version
+      placeholder: "1.2.3"
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: (Recommended) Full output of commands in "How to reproduce" with WERF_LOG_DEBUG=1
+      render: shell
+  - type: textarea
+    attributes:
+      label: Additional information
