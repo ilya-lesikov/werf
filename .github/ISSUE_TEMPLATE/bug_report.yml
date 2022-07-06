@@ -1,5 +1,5 @@
-name: Bug report
-description: "---"
+name: Bug
+description: Leave a bug report
 body:
   - type: checkboxes
     attributes:
