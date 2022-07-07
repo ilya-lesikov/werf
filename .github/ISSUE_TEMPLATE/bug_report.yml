@@ -5,7 +5,7 @@ body:
     attributes:
       label: "Before proceeding"
       options:
-        - label: "I haven't found similar [issue](https://github.com/werf/werf/issues)"
+        - label: "I didn't find a similar [issue](https://github.com/werf/werf/issues)"
           required: true
   - type: input
     attributes:
